@@ -1,15 +1,31 @@
 const state = {
   documentId: null,
+  filename: "",
+  pageCount: 0,
   pageSizes: [],
+  renderUrls: [],
   fields: [],
   selectedId: null,
+  signatureMode: "draw",
 };
 
 const pages = document.querySelector("#pages");
 const pdfInput = document.querySelector("#pdf-input");
 const exportButton = document.querySelector("#export-button");
+const saveProjectButton = document.querySelector("#save-project-button");
+const openProjectButton = document.querySelector("#open-project-button");
 const inspector = document.querySelector("#field-form");
 const deleteButton = document.querySelector("#delete-field");
+const signatureButton = document.querySelector("#signature-button");
+const projectDialog = document.querySelector("#project-dialog");
+const projectList = document.querySelector("#project-list");
+const signatureDialog = document.querySelector("#signature-dialog");
+const signatureCanvas = document.querySelector("#signature-canvas");
+const signatureText = document.querySelector("#signature-text");
+const signaturePreview = document.querySelector("#signature-preview");
+const clearSignatureButton = document.querySelector("#clear-signature");
+const applySignatureButton = document.querySelector("#apply-signature");
+const signatureContext = signatureCanvas.getContext("2d");
 
 pdfInput.addEventListener("change", async () => {
   const file = pdfInput.files[0];
@@ -23,12 +39,7 @@ pdfInput.addEventListener("change", async () => {
     return;
   }
   const info = await response.json();
-  state.documentId = info.document_id;
-  state.pageSizes = info.page_sizes;
-  state.fields = info.fields;
-  state.selectedId = null;
-  exportButton.disabled = false;
-  renderDocument(info.render_urls);
+  loadDocumentInfo(info);
 });
 
 document.querySelectorAll("[data-add]").forEach((button) => {
@@ -49,6 +60,22 @@ exportButton.addEventListener("click", async () => {
   const payload = await response.json();
   window.location.href = payload.download_url;
 });
+
+saveProjectButton.addEventListener("click", saveProject);
+openProjectButton.addEventListener("click", openProjectChooser);
+signatureButton.addEventListener("click", openSignatureDialog);
+clearSignatureButton.addEventListener("click", clearSignature);
+applySignatureButton.addEventListener("click", applySignature);
+
+document.querySelectorAll("[data-signature-tab]").forEach((button) => {
+  button.addEventListener("click", () => setSignatureMode(button.dataset.signatureTab));
+});
+
+signatureText.addEventListener("input", () => {
+  signaturePreview.textContent = signatureText.value;
+});
+
+signatureCanvas.addEventListener("pointerdown", startSignatureDraw);
 
 inspector.addEventListener("input", () => {
   const field = selectedField();
@@ -74,6 +101,20 @@ deleteButton.addEventListener("click", () => {
   syncInspector();
   renderFields();
 });
+
+function loadDocumentInfo(info) {
+  state.documentId = info.document_id;
+  state.filename = info.filename;
+  state.pageCount = info.page_count;
+  state.pageSizes = info.page_sizes;
+  state.renderUrls = info.render_urls;
+  state.fields = info.fields;
+  state.selectedId = null;
+  exportButton.disabled = false;
+  saveProjectButton.disabled = false;
+  renderDocument(info.render_urls);
+  syncInspector();
+}
 
 function renderDocument(renderUrls) {
   pages.innerHTML = "";
@@ -113,6 +154,12 @@ function renderFields() {
       event.stopPropagation();
       selectField(field.id);
     });
+    if (field.type === "signature" && field.signature_data_url) {
+      const image = document.createElement("img");
+      image.className = "signature-image";
+      image.src = field.signature_data_url;
+      element.appendChild(image);
+    }
     page.appendChild(element);
   });
 }
@@ -163,6 +210,8 @@ function addField(type) {
     required: false,
     options: [],
     group: "",
+    value: "",
+    signature_data_url: "",
   });
   selectField(id);
   renderFields();
@@ -189,6 +238,7 @@ function syncInspector() {
   inspector.height.value = field ? round(field.height) : "";
   inspector.options.value = field?.options?.join("\n") || "";
   inspector.required.checked = Boolean(field?.required);
+  signatureButton.disabled = field?.type !== "signature";
 }
 
 function numberValue(value, fallback) {
@@ -198,4 +248,148 @@ function numberValue(value, fallback) {
 
 function round(value) {
   return Math.round(value * 10) / 10;
+}
+
+async function saveProject() {
+  if (!state.documentId) return;
+  const response = await fetch(`/api/projects/${state.documentId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      filename: state.filename,
+      page_count: state.pageCount,
+      page_sizes: state.pageSizes,
+      render_urls: state.renderUrls,
+      fields: state.fields,
+    }),
+  });
+  if (!response.ok) {
+    alert(await response.text());
+    return;
+  }
+  const saved = await response.json();
+  saveProjectButton.textContent = "Saved";
+  setTimeout(() => {
+    saveProjectButton.textContent = "Save Project";
+  }, 1400);
+  document.title = `OpenPDFForms - ${saved.filename}`;
+}
+
+async function openProjectChooser() {
+  const response = await fetch("/api/projects");
+  if (!response.ok) {
+    alert(await response.text());
+    return;
+  }
+  const projects = await response.json();
+  projectList.innerHTML = "";
+  if (!projects.length) {
+    projectList.innerHTML = "<div class=\"empty\"><p>No saved projects yet.</p></div>";
+  }
+  projects.forEach((project) => {
+    const item = document.createElement("article");
+    item.className = "project-item";
+    const info = document.createElement("div");
+    info.innerHTML = `<strong>${escapeHtml(project.filename)}</strong><span>${new Date(project.updated_at).toLocaleString()}</span>`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Open";
+    button.addEventListener("click", () => openProject(project.document_id));
+    item.append(info, button);
+    projectList.appendChild(item);
+  });
+  projectDialog.showModal();
+}
+
+async function openProject(documentId) {
+  const response = await fetch(`/api/projects/${documentId}`);
+  if (!response.ok) {
+    alert(await response.text());
+    return;
+  }
+  loadDocumentInfo(await response.json());
+  projectDialog.close();
+}
+
+function openSignatureDialog() {
+  const field = selectedField();
+  if (!field || field.type !== "signature") return;
+  clearSignature();
+  if (field.signature_data_url) {
+    const image = new Image();
+    image.onload = () => {
+      signatureContext.drawImage(image, 0, 0, signatureCanvas.width, signatureCanvas.height);
+    };
+    image.src = field.signature_data_url;
+  }
+  signatureDialog.showModal();
+}
+
+function setSignatureMode(mode) {
+  state.signatureMode = mode;
+  document.querySelectorAll("[data-signature-tab]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.signatureTab === mode);
+  });
+  document.querySelector("#signature-draw-panel").hidden = mode !== "draw";
+  document.querySelector("#signature-type-panel").hidden = mode !== "type";
+}
+
+function clearSignature() {
+  signatureContext.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+  signatureText.value = "";
+  signaturePreview.textContent = "";
+}
+
+function startSignatureDraw(event) {
+  if (state.signatureMode !== "draw") return;
+  const rect = signatureCanvas.getBoundingClientRect();
+  signatureContext.lineWidth = 4;
+  signatureContext.lineCap = "round";
+  signatureContext.lineJoin = "round";
+  signatureContext.strokeStyle = "#111827";
+  signatureContext.beginPath();
+  signatureContext.moveTo((event.clientX - rect.left) * signatureCanvas.width / rect.width, (event.clientY - rect.top) * signatureCanvas.height / rect.height);
+  signatureCanvas.setPointerCapture(event.pointerId);
+
+  const draw = (moveEvent) => {
+    signatureContext.lineTo((moveEvent.clientX - rect.left) * signatureCanvas.width / rect.width, (moveEvent.clientY - rect.top) * signatureCanvas.height / rect.height);
+    signatureContext.stroke();
+  };
+  const stop = () => {
+    signatureCanvas.removeEventListener("pointermove", draw);
+    signatureCanvas.removeEventListener("pointerup", stop);
+  };
+  signatureCanvas.addEventListener("pointermove", draw);
+  signatureCanvas.addEventListener("pointerup", stop);
+}
+
+function applySignature() {
+  const field = selectedField();
+  if (!field || field.type !== "signature") return;
+  field.signature_data_url = state.signatureMode === "type" ? typedSignatureDataUrl() : signatureCanvas.toDataURL("image/png");
+  signatureDialog.close();
+  renderFields();
+}
+
+function typedSignatureDataUrl() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 900;
+  canvas.height = 260;
+  const context = canvas.getContext("2d");
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = "#111827";
+  context.font = "92px Snell Roundhand, Brush Script MT, Segoe Script, cursive";
+  context.textBaseline = "middle";
+  context.fillText(signatureText.value || "Signature", 36, canvas.height / 2);
+  return canvas.toDataURL("image/png");
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  }[char]));
 }

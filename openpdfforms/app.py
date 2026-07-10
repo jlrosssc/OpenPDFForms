@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -8,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .detector import detect_fields, render_pdf_pages
 from .exporter import export_fillable_pdf
-from .models import DocumentInfo, ExportRequest, ExportResponse
+from .models import DocumentInfo, ExportRequest, ExportResponse, ProjectSaveRequest, ProjectSummary
 from .storage import (
     EXPORT_ROOT,
     RENDER_ROOT,
@@ -17,6 +19,7 @@ from .storage import (
     ensure_data_dirs,
     export_path,
     new_document_id,
+    project_path,
     reset_render_dir,
 )
 
@@ -73,3 +76,45 @@ def download_document(document_id: str) -> FileResponse:
     if not output_path.exists():
         raise HTTPException(status_code=404, detail="Export not found.")
     return FileResponse(output_path, media_type="application/pdf", filename=output_path.name)
+
+
+@app.put("/api/projects/{document_id}", response_model=ProjectSummary)
+def save_project(document_id: str, request: ProjectSaveRequest) -> ProjectSummary:
+    matches = list(UPLOAD_ROOT.glob(f"{document_id}.*"))
+    if not matches:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    updated_at = datetime.now(timezone.utc).isoformat()
+    payload = request.model_dump(mode="json")
+    payload["document_id"] = document_id
+    payload["updated_at"] = updated_at
+    path = project_path(document_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return ProjectSummary(document_id=document_id, filename=request.filename, updated_at=updated_at)
+
+
+@app.get("/api/projects", response_model=list[ProjectSummary])
+def list_projects() -> list[ProjectSummary]:
+    projects: list[ProjectSummary] = []
+    for path in sorted(project_path("*").parent.glob("*.json"), key=lambda item: item.stat().st_mtime, reverse=True):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        projects.append(
+            ProjectSummary(
+                document_id=payload.get("document_id") or path.stem,
+                filename=payload.get("filename") or path.stem,
+                updated_at=payload.get("updated_at") or datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(),
+            )
+        )
+    return projects
+
+
+@app.get("/api/projects/{document_id}", response_model=DocumentInfo)
+def open_project(document_id: str) -> DocumentInfo:
+    path = project_path(document_id)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Project not found.")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return DocumentInfo.model_validate(payload)

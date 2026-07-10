@@ -30,6 +30,8 @@ class FormField(BaseModel):
     required: bool = False
     options: list[str] = Field(default_factory=list)
     group: str = ""
+    value: str = ""
+    signature_data_url: str = ""
 
 
 class DocumentInfo(BaseModel):
@@ -47,6 +49,20 @@ class ExportRequest(BaseModel):
 
 class ExportResponse(BaseModel):
     download_url: str
+
+
+class ProjectSummary(BaseModel):
+    document_id: str
+    filename: str
+    updated_at: str
+
+
+class ProjectSaveRequest(BaseModel):
+    filename: str
+    page_count: int
+    page_sizes: list[tuple[float, float]]
+    render_urls: list[str]
+    fields: list[FormField]
 
 
 class HookContext(BaseModel):
