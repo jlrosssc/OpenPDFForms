@@ -22,7 +22,7 @@ def render_pdf_pages(source_pdf: Path, render_dir: Path, zoom: float = 1.75) -> 
             pix = page.get_pixmap(matrix=matrix, alpha=False)
             image_path = render_dir / f"page-{page_index + 1}.png"
             pix.save(image_path)
-            urls.append(f"/renders/{render_dir.name}/{image_path.name}")
+            urls.append(f"renders/{render_dir.name}/{image_path.name}")
     return urls, page_sizes
 
 

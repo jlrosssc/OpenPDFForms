@@ -27,13 +27,17 @@ const clearSignatureButton = document.querySelector("#clear-signature");
 const applySignatureButton = document.querySelector("#apply-signature");
 const signatureContext = signatureCanvas.getContext("2d");
 
+function appUrl(path) {
+  return new URL(path, window.location.href).toString();
+}
+
 pdfInput.addEventListener("change", async () => {
   const file = pdfInput.files[0];
   if (!file) return;
   const body = new FormData();
   body.append("file", file);
   pages.innerHTML = "<div class=\"empty\"><h2>Processing PDF...</h2></div>";
-  const response = await fetch("/api/documents", { method: "POST", body });
+  const response = await fetch(appUrl("api/documents"), { method: "POST", body });
   if (!response.ok) {
     pages.innerHTML = `<div class="empty"><h2>Upload failed</h2><p>${await response.text()}</p></div>`;
     return;
@@ -48,7 +52,7 @@ document.querySelectorAll("[data-add]").forEach((button) => {
 
 exportButton.addEventListener("click", async () => {
   if (!state.documentId) return;
-  const response = await fetch(`/api/documents/${state.documentId}/export`, {
+  const response = await fetch(appUrl(`api/documents/${state.documentId}/export`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ fields: state.fields }),
@@ -58,7 +62,7 @@ exportButton.addEventListener("click", async () => {
     return;
   }
   const payload = await response.json();
-  window.location.href = payload.download_url;
+  window.location.href = appUrl(payload.download_url);
 });
 
 saveProjectButton.addEventListener("click", saveProject);
@@ -252,7 +256,7 @@ function round(value) {
 
 async function saveProject() {
   if (!state.documentId) return;
-  const response = await fetch(`/api/projects/${state.documentId}`, {
+  const response = await fetch(appUrl(`api/projects/${state.documentId}`), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -276,7 +280,7 @@ async function saveProject() {
 }
 
 async function openProjectChooser() {
-  const response = await fetch("/api/projects");
+  const response = await fetch(appUrl("api/projects"));
   if (!response.ok) {
     alert(await response.text());
     return;
@@ -302,7 +306,7 @@ async function openProjectChooser() {
 }
 
 async function openProject(documentId) {
-  const response = await fetch(`/api/projects/${documentId}`);
+  const response = await fetch(appUrl(`api/projects/${documentId}`));
   if (!response.ok) {
     alert(await response.text());
     return;

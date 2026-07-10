@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import shutil
 import uuid
+import os
 from pathlib import Path
 
 
-DATA_ROOT = Path("data")
+DATA_ROOT = Path(os.environ.get("OPENPDFFORMS_DATA_DIR", "data"))
 UPLOAD_ROOT = DATA_ROOT / "uploads"
 RENDER_ROOT = DATA_ROOT / "renders"
 EXPORT_ROOT = DATA_ROOT / "exports"

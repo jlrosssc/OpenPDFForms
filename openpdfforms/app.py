@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import json
 from datetime import datetime, timezone
+import os
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -24,7 +25,7 @@ from .storage import (
 )
 
 
-app = FastAPI(title="OpenPDFForms")
+app = FastAPI(title="OpenPDFForms", root_path=os.environ.get("OPENPDFFORMS_ROOT_PATH", ""))
 ensure_data_dirs()
 
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
@@ -67,7 +68,7 @@ def export_document(document_id: str, request: ExportRequest) -> ExportResponse:
         raise HTTPException(status_code=404, detail="Document not found.")
     output_path = export_path(document_id)
     export_fillable_pdf(matches[0], output_path, request.fields)
-    return ExportResponse(download_url=f"/api/documents/{document_id}/download")
+    return ExportResponse(download_url=f"api/documents/{document_id}/download")
 
 
 @app.get("/api/documents/{document_id}/download")
