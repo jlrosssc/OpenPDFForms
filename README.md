@@ -1,0 +1,33 @@
+# OpenPDFForms
+
+OpenPDFForms is a local web app for turning flat or scanned PDFs into fillable PDF forms.
+
+The first version focuses on a practical review workflow:
+
+- Upload a PDF.
+- Render each page in the browser.
+- Auto-detect likely text fields, checkboxes, and radio buttons.
+- Edit, move, resize, add, or delete fields.
+- Export a fillable AcroForm PDF.
+- Customize detection and field naming with Python hooks.
+
+## Quick Start
+
+```bash
+python3.11 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+uvicorn openpdfforms.app:app --reload
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8000
+```
+
+## Notes
+
+This is intentionally local-first. Uploaded PDFs are stored in `data/uploads`, rendered page images in `data/renders`, and exported PDFs in `data/exports`.
+
+The detector is heuristic-based in this first version. It uses PDF text geometry and page rendering analysis to find likely fields, then expects a human to review the overlay before export.

@@ -1,0 +1,10 @@
+[project]
+name = "openpdfforms"
+version = "0.1.0"
+description = "Local web app for detecting, reviewing, and exporting fillable PDF forms."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = { text = "MIT" }
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
