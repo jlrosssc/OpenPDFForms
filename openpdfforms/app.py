@@ -28,6 +28,15 @@ from .storage import (
 app = FastAPI(title="OpenPDFForms", root_path=os.environ.get("OPENPDFFORMS_ROOT_PATH", ""))
 ensure_data_dirs()
 
+
+@app.middleware("http")
+async def no_cache_for_app_shell(request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 app.mount("/renders", StaticFiles(directory=RENDER_ROOT), name="renders")
 
