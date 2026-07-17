@@ -99,6 +99,14 @@ button:disabled {
   font-size: 14px;
 }
 
+.tool-group .hint {
+  grid-column: 1 / -1;
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .inspector {
   display: grid;
   gap: 10px;
