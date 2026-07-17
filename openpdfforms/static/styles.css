@@ -138,6 +138,11 @@ button:disabled {
   color: #fff;
 }
 
+.tool-group button.is-repeating {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+
 .inspector {
   display: grid;
   gap: 10px;
@@ -250,6 +255,21 @@ button:disabled {
 .field.is-active {
   outline-width: 3px;
 }
+
+.resize-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: #fff;
+  border: 1px solid var(--field-border);
+  border-radius: 2px;
+  z-index: 2;
+}
+
+.resize-nw { top: -5px; left: -5px; cursor: nwse-resize; }
+.resize-ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.resize-sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.resize-se { bottom: -5px; right: -5px; cursor: nwse-resize; }
 
 .field .signature-image {
   width: 100%;

@@ -140,6 +140,7 @@ pdfInput.addEventListener("change", async () => {
 
 document.querySelectorAll("[data-add]").forEach((button) => {
   button.addEventListener("click", () => startPlacing(button.dataset.add));
+  button.addEventListener("dblclick", () => startPlacing(button.dataset.add, true));
 });
 
 document.addEventListener("keydown", (event) => {
@@ -465,8 +466,63 @@ function renderFields() {
       image.src = field.signature_data_url;
       element.appendChild(image);
     }
+    if (state.selectedIds.has(field.id)) {
+      ["nw", "ne", "sw", "se"].forEach((corner) => {
+        const handle = document.createElement("div");
+        handle.className = `resize-handle resize-${corner}`;
+        handle.addEventListener("pointerdown", (event) => startResize(event, field, corner));
+        element.appendChild(handle);
+      });
+    }
     page.appendChild(element);
   });
+}
+
+function startResize(event, field, corner) {
+  event.stopPropagation();
+  event.preventDefault();
+  const element = document.querySelector(`.field[data-id="${field.id}"]`);
+  const page = document.querySelector(`.page[data-page="${field.page}"]`);
+  const img = page.querySelector("img");
+  const [pdfWidth, pdfHeight] = state.pageSizes[field.page];
+  const scaleX = img.clientWidth / pdfWidth;
+  const scaleY = img.clientHeight / pdfHeight;
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const origin = { x: field.x, y: field.y, width: field.width, height: field.height };
+  const MIN_SIZE = 6;
+  pushHistory();
+
+  const move = (moveEvent) => {
+    const dx = (moveEvent.clientX - startX) / scaleX;
+    const dy = (moveEvent.clientY - startY) / scaleY;
+    let { x, y, width, height } = origin;
+    if (corner.includes("e")) width = Math.max(MIN_SIZE, origin.width + dx);
+    if (corner.includes("s")) height = Math.max(MIN_SIZE, origin.height + dy);
+    if (corner.includes("w")) {
+      width = Math.max(MIN_SIZE, origin.width - dx);
+      x = origin.x + origin.width - width;
+    }
+    if (corner.includes("n")) {
+      height = Math.max(MIN_SIZE, origin.height - dy);
+      y = origin.y + origin.height - height;
+    }
+    field.x = Math.max(0, x);
+    field.y = Math.max(0, y);
+    field.width = width;
+    field.height = height;
+    element.style.left = `${field.x * scaleX}px`;
+    element.style.top = `${field.y * scaleY}px`;
+    element.style.width = `${field.width * scaleX}px`;
+    element.style.height = `${field.height * scaleY}px`;
+  };
+  const up = () => {
+    document.removeEventListener("pointermove", move);
+    document.removeEventListener("pointerup", up);
+    syncInspector();
+  };
+  document.addEventListener("pointermove", move);
+  document.addEventListener("pointerup", up);
 }
 
 function startDrag(event) {
@@ -524,20 +580,23 @@ function startDrag(event) {
   document.addEventListener("pointerup", up);
 }
 
-function startPlacing(type) {
+function startPlacing(type, repeat) {
   if (!state.documentId) return;
   state.pendingType = type;
+  state.placingRepeat = Boolean(repeat);
   pages.classList.add("placing");
   document.querySelectorAll("[data-add]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.add === type);
+    button.classList.toggle("is-repeating", button.dataset.add === type && state.placingRepeat);
   });
 }
 
 function stopPlacing() {
   state.pendingType = null;
+  state.placingRepeat = false;
   pages.classList.remove("placing");
   document.querySelectorAll("[data-add]").forEach((button) => {
-    button.classList.remove("is-active");
+    button.classList.remove("is-active", "is-repeating");
   });
 }
 
@@ -571,8 +630,13 @@ function placeField(type, pageElement, pageIndex, event) {
     signature_data_url: "",
   });
   state.currentPage = pageIndex;
-  stopPlacing();
-  selectOnly(id);
+  if (state.placingRepeat) {
+    selectOnly(id);
+    startPlacing(type, true);
+  } else {
+    stopPlacing();
+    selectOnly(id);
+  }
 }
 
 function selectOnly(id) {

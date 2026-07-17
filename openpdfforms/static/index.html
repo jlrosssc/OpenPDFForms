@@ -34,12 +34,12 @@
     <aside class="sidebar">
       <div class="tool-group">
         <h2>Add Field</h2>
-        <p class="hint">Click a type, then click where you want it on the page. Press Esc to cancel.</p>
+        <p class="hint">Click a type, then click where you want it. Double-click a type to keep placing several in a row. Press Esc to cancel.</p>
         <button data-add="text">+ Text</button>
         <button data-add="checkbox">+ Checkbox</button>
         <button data-add="radio">+ Radio</button>
         <button data-add="dropdown">+ Dropdown</button>
-        <button data-add="signature">+ Signature</button>
+        <button data-add="signature">+ Simulated Signature</button>
         <button data-add="date">+ Date</button>
       </div>
       <div class="tool-group" id="arrange-group">
@@ -66,7 +66,7 @@
             <option value="checkbox">Checkbox</option>
             <option value="radio">Radio</option>
             <option value="dropdown">Dropdown</option>
-            <option value="signature">Signature</option>
+            <option value="signature">Simulated Signature</option>
             <option value="date">Date</option>
           </select>
         </label>
@@ -115,7 +115,7 @@
         </label>
         <label>Calculation fields<input name="calc_fields" placeholder="Comma-separated field names"></label>
         <label class="check"><input name="required" type="checkbox"> Required</label>
-        <button id="signature-button" type="button">Create Signature</button>
+        <button id="signature-button" type="button">Create Simulated Signature</button>
         <button id="delete-field" type="button">Delete Field</button>
       </form>
     </aside>
@@ -140,7 +140,7 @@
   <dialog id="signature-dialog" class="modal signature-modal">
     <form method="dialog">
       <header>
-        <h2>Create Signature</h2>
+        <h2>Create Simulated Signature</h2>
         <button value="cancel" aria-label="Close">x</button>
       </header>
       <div class="signature-tabs">
@@ -151,12 +151,12 @@
         <canvas id="signature-canvas" width="720" height="220"></canvas>
       </section>
       <section id="signature-type-panel" hidden>
-        <input id="signature-text" placeholder="Type your signature">
+        <input id="signature-text" placeholder="Type your simulated signature">
         <div id="signature-preview" class="signature-preview"></div>
       </section>
       <footer>
         <button id="clear-signature" type="button">Clear</button>
-        <button id="apply-signature" type="button">Apply Signature</button>
+        <button id="apply-signature" type="button">Apply Simulated Signature</button>
       </footer>
     </form>
   </dialog>
