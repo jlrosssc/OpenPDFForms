@@ -107,6 +107,12 @@ button:disabled {
   line-height: 1.4;
 }
 
+.tool-group button.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .inspector {
   display: grid;
   gap: 10px;
@@ -142,6 +148,14 @@ button:disabled {
 .pages {
   padding: 20px;
   overflow: auto;
+}
+
+.pages.placing .page {
+  cursor: crosshair;
+}
+
+.pages.placing .field {
+  pointer-events: none;
 }
 
 .empty {

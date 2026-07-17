@@ -8,6 +8,7 @@ const state = {
   selectedId: null,
   signatureMode: "draw",
   currentPage: 0,
+  pendingType: null,
 };
 
 const pages = document.querySelector("#pages");
@@ -48,7 +49,13 @@ pdfInput.addEventListener("change", async () => {
 });
 
 document.querySelectorAll("[data-add]").forEach((button) => {
-  button.addEventListener("click", () => addField(button.dataset.add));
+  button.addEventListener("click", () => startPlacing(button.dataset.add));
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.pendingType) {
+    stopPlacing();
+  }
 });
 
 exportButton.addEventListener("click", async () => {
@@ -128,7 +135,11 @@ function renderDocument(renderUrls) {
     const page = document.createElement("div");
     page.className = "page";
     page.dataset.page = pageIndex;
-    page.addEventListener("click", () => {
+    page.addEventListener("click", (event) => {
+      if (state.pendingType) {
+        placeField(state.pendingType, page, pageIndex, event);
+        return;
+      }
       state.currentPage = pageIndex;
     });
     const img = document.createElement("img");
@@ -193,7 +204,6 @@ function startDrag(event) {
   const startX = event.clientX;
   const startY = event.clientY;
   const original = { x: field.x, y: field.y };
-  element.setPointerCapture(event.pointerId);
 
   const move = (moveEvent) => {
     field.x = Math.max(0, original.x + (moveEvent.clientX - startX) / scaleX);
@@ -202,26 +212,50 @@ function startDrag(event) {
     element.style.top = `${field.y * scaleY}px`;
   };
   const up = () => {
-    element.removeEventListener("pointermove", move);
-    element.removeEventListener("pointerup", up);
+    document.removeEventListener("pointermove", move);
+    document.removeEventListener("pointerup", up);
   };
-  element.addEventListener("pointermove", move);
-  element.addEventListener("pointerup", up);
+  document.addEventListener("pointermove", move);
+  document.addEventListener("pointerup", up);
 }
 
-function addField(type) {
+function startPlacing(type) {
   if (!state.documentId) return;
-  const page = state.currentPage;
+  state.pendingType = type;
+  pages.classList.add("placing");
+  document.querySelectorAll("[data-add]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.add === type);
+  });
+}
+
+function stopPlacing() {
+  state.pendingType = null;
+  pages.classList.remove("placing");
+  document.querySelectorAll("[data-add]").forEach((button) => {
+    button.classList.remove("is-active");
+  });
+}
+
+function placeField(type, pageElement, pageIndex, event) {
+  const img = pageElement.querySelector("img");
+  const rect = img.getBoundingClientRect();
+  const [pdfWidth, pdfHeight] = state.pageSizes[pageIndex];
+  const scaleX = img.clientWidth / pdfWidth;
+  const scaleY = img.clientHeight / pdfHeight;
+  const width = type === "checkbox" || type === "radio" ? 14 : 160;
+  const height = type === "checkbox" || type === "radio" ? 14 : 20;
+  const x = Math.max(0, (event.clientX - rect.left) / scaleX - width / 2);
+  const y = Math.max(0, (event.clientY - rect.top) / scaleY - height / 2);
   const id = crypto.randomUUID();
   state.fields.push({
     id,
-    page,
+    page: pageIndex,
     type,
     name: `${type}_${state.fields.length + 1}`,
-    x: 72,
-    y: 72,
-    width: type === "checkbox" || type === "radio" ? 14 : 160,
-    height: type === "checkbox" || type === "radio" ? 14 : 20,
+    x,
+    y,
+    width,
+    height,
     label: "",
     tooltip: "",
     required: false,
@@ -230,6 +264,8 @@ function addField(type) {
     value: "",
     signature_data_url: "",
   });
+  state.currentPage = pageIndex;
+  stopPlacing();
   selectField(id);
   renderFields();
 }
