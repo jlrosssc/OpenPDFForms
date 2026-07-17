@@ -11,7 +11,8 @@ from fastapi.staticfiles import StaticFiles
 
 from .detector import detect_fields, render_pdf_pages
 from .exporter import export_fillable_pdf
-from .models import DocumentInfo, ExportRequest, ExportResponse, ProjectSaveRequest, ProjectSummary
+from .models import DocumentInfo, ExportRequest, ExportResponse, ProjectSaveRequest, ProjectSummary, SignRequest
+from .signing import sign_pdf
 from .storage import (
     EXPORT_ROOT,
     RENDER_ROOT,
@@ -22,6 +23,7 @@ from .storage import (
     new_document_id,
     project_path,
     reset_render_dir,
+    signed_export_path,
 )
 
 
@@ -86,6 +88,32 @@ def download_document(document_id: str) -> FileResponse:
     if not output_path.exists():
         raise HTTPException(status_code=404, detail="Export not found.")
     return FileResponse(output_path, media_type="application/pdf", filename=output_path.name)
+
+
+@app.post("/api/documents/{document_id}/sign", response_model=ExportResponse)
+def sign_document(document_id: str, request: SignRequest) -> ExportResponse:
+    matches = list(UPLOAD_ROOT.glob(f"{document_id}.*"))
+    if not matches:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    fillable_path = export_path(document_id)
+    export_fillable_pdf(matches[0], fillable_path, request.fields)
+    signed_path = signed_export_path(document_id)
+    sign_pdf(
+        fillable_path,
+        signed_path,
+        signer_name=request.signer_name,
+        reason=request.reason,
+        location=request.location,
+    )
+    return ExportResponse(download_url=f"api/documents/{document_id}/download-signed")
+
+
+@app.get("/api/documents/{document_id}/download-signed")
+def download_signed_document(document_id: str) -> FileResponse:
+    signed_path = signed_export_path(document_id)
+    if not signed_path.exists():
+        raise HTTPException(status_code=404, detail="Signed export not found.")
+    return FileResponse(signed_path, media_type="application/pdf", filename=signed_path.name)
 
 
 @app.put("/api/projects/{document_id}", response_model=ProjectSummary)

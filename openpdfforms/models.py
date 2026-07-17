@@ -60,6 +60,13 @@ class ExportResponse(BaseModel):
     download_url: str
 
 
+class SignRequest(BaseModel):
+    fields: list[FormField]
+    signer_name: str = ""
+    reason: str = ""
+    location: str = ""
+
+
 class ProjectSummary(BaseModel):
     document_id: str
     filename: str
