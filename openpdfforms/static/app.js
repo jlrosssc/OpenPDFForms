@@ -11,6 +11,17 @@ const state = {
   pendingType: null,
 };
 
+function generateId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const random = (Math.random() * 16) | 0;
+    const value = char === "x" ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
 const pages = document.querySelector("#pages");
 const pdfInput = document.querySelector("#pdf-input");
 const exportButton = document.querySelector("#export-button");
@@ -247,7 +258,7 @@ function placeField(type, pageElement, pageIndex, event) {
   const height = type === "checkbox" || type === "radio" ? 14 : 20;
   const x = Math.max(0, (event.clientX - rect.left) / scaleX - width / 2);
   const y = Math.max(0, (event.clientY - rect.top) / scaleY - height / 2);
-  const id = crypto.randomUUID();
+  const id = generateId();
   state.fields.push({
     id,
     page: pageIndex,
