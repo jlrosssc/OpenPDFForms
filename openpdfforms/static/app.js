@@ -7,6 +7,7 @@ const state = {
   fields: [],
   selectedId: null,
   signatureMode: "draw",
+  currentPage: 0,
 };
 
 const pages = document.querySelector("#pages");
@@ -114,6 +115,7 @@ function loadDocumentInfo(info) {
   state.renderUrls = info.render_urls;
   state.fields = info.fields;
   state.selectedId = null;
+  state.currentPage = 0;
   exportButton.disabled = false;
   saveProjectButton.disabled = false;
   renderDocument(info.render_urls);
@@ -126,6 +128,9 @@ function renderDocument(renderUrls) {
     const page = document.createElement("div");
     page.className = "page";
     page.dataset.page = pageIndex;
+    page.addEventListener("click", () => {
+      state.currentPage = pageIndex;
+    });
     const img = document.createElement("img");
     img.src = url;
     img.onload = renderFields;
@@ -198,7 +203,7 @@ function startDrag(event) {
 
 function addField(type) {
   if (!state.documentId) return;
-  const page = 0;
+  const page = state.currentPage;
   const id = crypto.randomUUID();
   state.fields.push({
     id,
@@ -223,6 +228,8 @@ function addField(type) {
 
 function selectField(id) {
   state.selectedId = id;
+  const field = selectedField();
+  if (field) state.currentPage = field.page;
   syncInspector();
   renderFields();
 }
