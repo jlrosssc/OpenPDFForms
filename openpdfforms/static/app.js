@@ -177,7 +177,14 @@ function startDrag(event) {
   const element = event.currentTarget;
   const field = state.fields.find((item) => item.id === element.dataset.id);
   if (!field) return;
-  selectField(field.id);
+  if (state.selectedId !== field.id) {
+    state.selectedId = field.id;
+    state.currentPage = field.page;
+    syncInspector();
+    document.querySelectorAll(".field").forEach((el) => {
+      el.classList.toggle("is-selected", el.dataset.id === field.id);
+    });
+  }
   const page = element.closest(".page");
   const img = page.querySelector("img");
   const [pdfWidth, pdfHeight] = state.pageSizes[field.page];
@@ -191,7 +198,8 @@ function startDrag(event) {
   const move = (moveEvent) => {
     field.x = Math.max(0, original.x + (moveEvent.clientX - startX) / scaleX);
     field.y = Math.max(0, original.y + (moveEvent.clientY - startY) / scaleY);
-    renderFields();
+    element.style.left = `${field.x * scaleX}px`;
+    element.style.top = `${field.y * scaleY}px`;
   };
   const up = () => {
     element.removeEventListener("pointermove", move);
