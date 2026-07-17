@@ -5,11 +5,73 @@ const state = {
   pageSizes: [],
   renderUrls: [],
   fields: [],
-  selectedId: null,
+  selectedIds: new Set(),
+  activeId: null,
   signatureMode: "draw",
   currentPage: 0,
   pendingType: null,
+  zoom: 1,
+  history: [],
+  future: [],
+  inspectorDirty: false,
 };
+
+const MAX_HISTORY = 50;
+
+function snapshotFields() {
+  return JSON.parse(JSON.stringify(state.fields));
+}
+
+function pushHistory() {
+  state.history.push(snapshotFields());
+  if (state.history.length > MAX_HISTORY) state.history.shift();
+  state.future = [];
+  refreshToolbarState();
+}
+
+function undo() {
+  if (!state.history.length) return;
+  state.future.push(snapshotFields());
+  state.fields = state.history.pop();
+  pruneSelection();
+  renderFields();
+  syncInspector();
+  refreshToolbarState();
+}
+
+function redo() {
+  if (!state.future.length) return;
+  state.history.push(snapshotFields());
+  state.fields = state.future.pop();
+  pruneSelection();
+  renderFields();
+  syncInspector();
+  refreshToolbarState();
+}
+
+function refreshToolbarState() {
+  undoButton.disabled = !state.history.length;
+  redoButton.disabled = !state.future.length;
+  const count = state.selectedIds.size;
+  deleteButton.disabled = count === 0;
+  Object.values(alignButtons).forEach((button) => {
+    button.disabled = count < 2;
+  });
+  distributeHButton.disabled = count < 3;
+  distributeVButton.disabled = count < 3;
+  duplicateButton.disabled = count < 1;
+  duplicateAllPagesButton.disabled = count < 1;
+}
+
+function pruneSelection() {
+  const ids = new Set(state.fields.map((field) => field.id));
+  state.selectedIds.forEach((id) => {
+    if (!ids.has(id)) state.selectedIds.delete(id);
+  });
+  if (state.activeId && !ids.has(state.activeId)) {
+    state.activeId = state.selectedIds.size ? [...state.selectedIds].pop() : null;
+  }
+}
 
 function generateId() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") {
@@ -39,6 +101,23 @@ const signaturePreview = document.querySelector("#signature-preview");
 const clearSignatureButton = document.querySelector("#clear-signature");
 const applySignatureButton = document.querySelector("#apply-signature");
 const signatureContext = signatureCanvas.getContext("2d");
+const undoButton = document.querySelector("#undo-button");
+const redoButton = document.querySelector("#redo-button");
+const zoomOutButton = document.querySelector("#zoom-out");
+const zoomInButton = document.querySelector("#zoom-in");
+const zoomLevelLabel = document.querySelector("#zoom-level");
+const alignButtons = {
+  left: document.querySelector("#align-left"),
+  right: document.querySelector("#align-right"),
+  top: document.querySelector("#align-top"),
+  bottom: document.querySelector("#align-bottom"),
+  centerH: document.querySelector("#align-center-h"),
+  centerV: document.querySelector("#align-center-v"),
+};
+const distributeHButton = document.querySelector("#distribute-h");
+const distributeVButton = document.querySelector("#distribute-v");
+const duplicateButton = document.querySelector("#duplicate-field");
+const duplicateAllPagesButton = document.querySelector("#duplicate-all-pages");
 
 function appUrl(path) {
   return new URL(path, window.location.href).toString();
@@ -66,6 +145,21 @@ document.querySelectorAll("[data-add]").forEach((button) => {
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && state.pendingType) {
     stopPlacing();
+    return;
+  }
+  const tag = event.target.tagName;
+  const isFormField = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+  if (isFormField || !(event.metaKey || event.ctrlKey)) return;
+  const key = event.key.toLowerCase();
+  if (key === "z" && event.shiftKey) {
+    event.preventDefault();
+    redo();
+  } else if (key === "z") {
+    event.preventDefault();
+    undo();
+  } else if (key === "y") {
+    event.preventDefault();
+    redo();
   }
 });
 
@@ -103,6 +197,10 @@ signatureCanvas.addEventListener("pointerdown", startSignatureDraw);
 inspector.addEventListener("input", () => {
   const field = selectedField();
   if (!field) return;
+  if (!state.inspectorDirty) {
+    pushHistory();
+    state.inspectorDirty = true;
+  }
   const data = new FormData(inspector);
   field.name = data.get("name") || field.name;
   field.label = data.get("label") || "";
@@ -118,12 +216,166 @@ inspector.addEventListener("input", () => {
 });
 
 deleteButton.addEventListener("click", () => {
-  if (!state.selectedId) return;
-  state.fields = state.fields.filter((field) => field.id !== state.selectedId);
-  state.selectedId = null;
+  if (!state.selectedIds.size) return;
+  pushHistory();
+  state.fields = state.fields.filter((field) => !state.selectedIds.has(field.id));
+  state.selectedIds.clear();
+  state.activeId = null;
   syncInspector();
   renderFields();
+  refreshToolbarState();
 });
+
+undoButton.addEventListener("click", undo);
+redoButton.addEventListener("click", redo);
+
+alignButtons.left.addEventListener("click", () => alignSelection("left"));
+alignButtons.right.addEventListener("click", () => alignSelection("right"));
+alignButtons.top.addEventListener("click", () => alignSelection("top"));
+alignButtons.bottom.addEventListener("click", () => alignSelection("bottom"));
+alignButtons.centerH.addEventListener("click", () => alignSelection("centerH"));
+alignButtons.centerV.addEventListener("click", () => alignSelection("centerV"));
+distributeHButton.addEventListener("click", () => distributeSelection("horizontal"));
+distributeVButton.addEventListener("click", () => distributeSelection("vertical"));
+duplicateButton.addEventListener("click", duplicateSelection);
+duplicateAllPagesButton.addEventListener("click", duplicateSelectionToAllPages);
+
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2;
+const ZOOM_BASE_WIDTH = 980;
+
+zoomInButton.addEventListener("click", () => {
+  state.zoom = Math.min(ZOOM_MAX, Math.round((state.zoom + 0.1) * 10) / 10);
+  applyZoom();
+});
+
+zoomOutButton.addEventListener("click", () => {
+  state.zoom = Math.max(ZOOM_MIN, Math.round((state.zoom - 0.1) * 10) / 10);
+  applyZoom();
+});
+
+function applyZoom() {
+  document.querySelectorAll(".page img").forEach((img) => {
+    if (state.zoom === 1) {
+      img.style.width = "";
+      img.style.maxWidth = "";
+    } else {
+      img.style.maxWidth = "none";
+      img.style.width = `${ZOOM_BASE_WIDTH * state.zoom}px`;
+    }
+  });
+  zoomLevelLabel.textContent = `${Math.round(state.zoom * 100)}%`;
+  zoomOutButton.disabled = state.zoom <= ZOOM_MIN;
+  zoomInButton.disabled = state.zoom >= ZOOM_MAX;
+  renderFields();
+}
+
+function alignSelection(mode) {
+  const fields = selectedFields();
+  const anchor = selectedField();
+  if (fields.length < 2 || !anchor) return;
+  pushHistory();
+  fields.forEach((field) => {
+    if (field.id === anchor.id) return;
+    switch (mode) {
+      case "left":
+        field.x = anchor.x;
+        break;
+      case "right":
+        field.x = anchor.x + anchor.width - field.width;
+        break;
+      case "top":
+        field.y = anchor.y;
+        break;
+      case "bottom":
+        field.y = anchor.y + anchor.height - field.height;
+        break;
+      case "centerH":
+        field.x = anchor.x + anchor.width / 2 - field.width / 2;
+        break;
+      case "centerV":
+        field.y = anchor.y + anchor.height / 2 - field.height / 2;
+        break;
+    }
+    field.x = Math.max(0, field.x);
+    field.y = Math.max(0, field.y);
+  });
+  renderFields();
+}
+
+function distributeSelection(axis) {
+  const fields = selectedFields();
+  if (fields.length < 3) return;
+  pushHistory();
+  if (axis === "horizontal") {
+    fields.sort((a, b) => a.x - b.x);
+    const first = fields[0];
+    const last = fields[fields.length - 1];
+    const span = last.x - first.x;
+    const step = span / (fields.length - 1);
+    fields.forEach((field, index) => {
+      if (index === 0 || index === fields.length - 1) return;
+      field.x = first.x + step * index;
+    });
+  } else {
+    fields.sort((a, b) => a.y - b.y);
+    const first = fields[0];
+    const last = fields[fields.length - 1];
+    const span = last.y - first.y;
+    const step = span / (fields.length - 1);
+    fields.forEach((field, index) => {
+      if (index === 0 || index === fields.length - 1) return;
+      field.y = first.y + step * index;
+    });
+  }
+  renderFields();
+}
+
+function duplicateSelection() {
+  const fields = selectedFields();
+  if (!fields.length) return;
+  pushHistory();
+  const offset = 14;
+  const newIds = [];
+  fields.forEach((field) => {
+    const id = generateId();
+    newIds.push(id);
+    state.fields.push({
+      ...field,
+      id,
+      x: field.x + offset,
+      y: field.y + offset,
+      name: `${field.name}_copy`,
+    });
+  });
+  state.selectedIds = new Set(newIds);
+  state.activeId = newIds[newIds.length - 1];
+  afterSelectionChange();
+}
+
+function duplicateSelectionToAllPages() {
+  const fields = selectedFields();
+  if (!fields.length || !state.pageCount) return;
+  pushHistory();
+  const newIds = [];
+  for (let page = 0; page < state.pageCount; page += 1) {
+    fields.forEach((field) => {
+      if (field.page === page) return;
+      const id = generateId();
+      newIds.push(id);
+      state.fields.push({
+        ...field,
+        id,
+        page,
+      });
+    });
+  }
+  if (newIds.length) {
+    state.selectedIds = new Set(newIds);
+    state.activeId = newIds[newIds.length - 1];
+  }
+  afterSelectionChange();
+}
 
 function loadDocumentInfo(info) {
   state.documentId = info.document_id;
@@ -132,12 +384,18 @@ function loadDocumentInfo(info) {
   state.pageSizes = info.page_sizes;
   state.renderUrls = info.render_urls;
   state.fields = info.fields;
-  state.selectedId = null;
+  state.selectedIds.clear();
+  state.activeId = null;
   state.currentPage = 0;
+  state.history = [];
+  state.future = [];
+  state.zoom = 1;
   exportButton.disabled = false;
   saveProjectButton.disabled = false;
   renderDocument(info.render_urls);
+  applyZoom();
   syncInspector();
+  refreshToolbarState();
 }
 
 function renderDocument(renderUrls) {
@@ -152,6 +410,7 @@ function renderDocument(renderUrls) {
         return;
       }
       state.currentPage = pageIndex;
+      if (!event.shiftKey) clearSelection();
     });
     const img = document.createElement("img");
     img.src = url;
@@ -173,7 +432,7 @@ function renderFields() {
     const scaleY = img.clientHeight / pdfHeight;
 
     const element = document.createElement("div");
-    element.className = `field${field.id === state.selectedId ? " is-selected" : ""}`;
+    element.className = `field${state.selectedIds.has(field.id) ? " is-selected" : ""}${field.id === state.activeId ? " is-active" : ""}`;
     element.dataset.id = field.id;
     element.dataset.type = field.type;
     element.dataset.name = field.name;
@@ -184,7 +443,11 @@ function renderFields() {
     element.addEventListener("pointerdown", startDrag);
     element.addEventListener("click", (event) => {
       event.stopPropagation();
-      selectField(field.id);
+      if (event.shiftKey) {
+        toggleSelect(field.id);
+      } else {
+        selectOnly(field.id);
+      }
     });
     if (field.type === "signature" && field.signature_data_url) {
       const image = document.createElement("img");
@@ -200,28 +463,48 @@ function startDrag(event) {
   const element = event.currentTarget;
   const field = state.fields.find((item) => item.id === element.dataset.id);
   if (!field) return;
-  if (state.selectedId !== field.id) {
-    state.selectedId = field.id;
+  if (!state.selectedIds.has(field.id)) {
+    selectOnly(field.id);
+  } else {
+    state.activeId = field.id;
     state.currentPage = field.page;
     syncInspector();
-    document.querySelectorAll(".field").forEach((el) => {
-      el.classList.toggle("is-selected", el.dataset.id === field.id);
-    });
   }
-  const page = element.closest(".page");
-  const img = page.querySelector("img");
-  const [pdfWidth, pdfHeight] = state.pageSizes[field.page];
-  const scaleX = img.clientWidth / pdfWidth;
-  const scaleY = img.clientHeight / pdfHeight;
+
   const startX = event.clientX;
   const startY = event.clientY;
-  const original = { x: field.x, y: field.y };
+
+  const draggedFields = state.fields.filter((item) => state.selectedIds.has(item.id));
+  const dragInfo = new Map(
+    draggedFields.map((item) => {
+      const itemPage = document.querySelector(`.page[data-page="${item.page}"]`);
+      const itemImg = itemPage.querySelector("img");
+      const [pdfWidth, pdfHeight] = state.pageSizes[item.page];
+      return [
+        item.id,
+        {
+          origin: { x: item.x, y: item.y },
+          scaleX: itemImg.clientWidth / pdfWidth,
+          scaleY: itemImg.clientHeight / pdfHeight,
+          element: document.querySelector(`.field[data-id="${item.id}"]`),
+        },
+      ];
+    })
+  );
+  pushHistory();
 
   const move = (moveEvent) => {
-    field.x = Math.max(0, original.x + (moveEvent.clientX - startX) / scaleX);
-    field.y = Math.max(0, original.y + (moveEvent.clientY - startY) / scaleY);
-    element.style.left = `${field.x * scaleX}px`;
-    element.style.top = `${field.y * scaleY}px`;
+    draggedFields.forEach((item) => {
+      const info = dragInfo.get(item.id);
+      const dx = (moveEvent.clientX - startX) / info.scaleX;
+      const dy = (moveEvent.clientY - startY) / info.scaleY;
+      item.x = Math.max(0, info.origin.x + dx);
+      item.y = Math.max(0, info.origin.y + dy);
+      if (info.element) {
+        info.element.style.left = `${item.x * info.scaleX}px`;
+        info.element.style.top = `${item.y * info.scaleY}px`;
+      }
+    });
   };
   const up = () => {
     document.removeEventListener("pointermove", move);
@@ -259,6 +542,7 @@ function placeField(type, pageElement, pageIndex, event) {
   const x = Math.max(0, (event.clientX - rect.left) / scaleX - width / 2);
   const y = Math.max(0, (event.clientY - rect.top) / scaleY - height / 2);
   const id = generateId();
+  pushHistory();
   state.fields.push({
     id,
     page: pageIndex,
@@ -278,20 +562,50 @@ function placeField(type, pageElement, pageIndex, event) {
   });
   state.currentPage = pageIndex;
   stopPlacing();
-  selectField(id);
-  renderFields();
+  selectOnly(id);
 }
 
-function selectField(id) {
-  state.selectedId = id;
+function selectOnly(id) {
+  state.selectedIds = new Set([id]);
+  state.activeId = id;
+  afterSelectionChange();
+}
+
+function toggleSelect(id) {
+  if (state.selectedIds.has(id)) {
+    state.selectedIds.delete(id);
+    if (state.activeId === id) {
+      state.activeId = state.selectedIds.size ? [...state.selectedIds].pop() : null;
+    }
+  } else {
+    state.selectedIds.add(id);
+    state.activeId = id;
+  }
+  afterSelectionChange();
+}
+
+function clearSelection() {
+  if (!state.selectedIds.size && !state.activeId) return;
+  state.selectedIds.clear();
+  state.activeId = null;
+  afterSelectionChange();
+}
+
+function afterSelectionChange() {
   const field = selectedField();
   if (field) state.currentPage = field.page;
+  state.inspectorDirty = false;
   syncInspector();
   renderFields();
+  refreshToolbarState();
 }
 
 function selectedField() {
-  return state.fields.find((field) => field.id === state.selectedId);
+  return state.fields.find((field) => field.id === state.activeId);
+}
+
+function selectedFields() {
+  return state.fields.filter((field) => state.selectedIds.has(field.id));
 }
 
 function syncInspector() {

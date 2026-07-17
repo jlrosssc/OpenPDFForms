@@ -19,6 +19,13 @@
       </label>
       <button id="open-project-button" type="button">Open Project</button>
       <button id="save-project-button" type="button" disabled>Save Project</button>
+      <button id="undo-button" type="button" disabled title="Undo (Ctrl/Cmd+Z)">Undo</button>
+      <button id="redo-button" type="button" disabled title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
+      <div class="zoom-control">
+        <button id="zoom-out" type="button" aria-label="Zoom out">-</button>
+        <span id="zoom-level">100%</span>
+        <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+      </div>
       <button id="export-button" disabled>Export Fillable PDF</button>
     </div>
   </header>
@@ -34,6 +41,20 @@
         <button data-add="dropdown">+ Dropdown</button>
         <button data-add="signature">+ Signature</button>
         <button data-add="date">+ Date</button>
+      </div>
+      <div class="tool-group" id="arrange-group">
+        <h2>Arrange</h2>
+        <p class="hint">Shift-click fields to select more than one.</p>
+        <button id="align-left" type="button" disabled title="Align left">Align L</button>
+        <button id="align-right" type="button" disabled title="Align right">Align R</button>
+        <button id="align-top" type="button" disabled title="Align top">Align T</button>
+        <button id="align-bottom" type="button" disabled title="Align bottom">Align B</button>
+        <button id="align-center-h" type="button" disabled title="Center horizontally">Center H</button>
+        <button id="align-center-v" type="button" disabled title="Center vertically">Center V</button>
+        <button id="distribute-h" type="button" disabled title="Distribute horizontally">Distribute H</button>
+        <button id="distribute-v" type="button" disabled title="Distribute vertically">Distribute V</button>
+        <button id="duplicate-field" type="button" disabled title="Duplicate selected field(s)">Duplicate</button>
+        <button id="duplicate-all-pages" type="button" disabled title="Copy selected field(s) to every page">Copy to All Pages</button>
       </div>
       <form id="field-form" class="inspector">
         <h2>Inspector</h2>

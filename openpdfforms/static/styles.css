@@ -50,6 +50,29 @@ button, input, select, textarea {
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
+}
+
+.zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+
+.zoom-control button {
+  border: none;
+  padding: 2px 8px;
+  line-height: 1.2;
+}
+
+#zoom-level {
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 40px;
+  text-align: center;
 }
 
 button, .file-button {
@@ -77,14 +100,16 @@ button:disabled {
 .workspace {
   display: grid;
   grid-template-columns: 280px 1fr;
-  min-height: calc(100vh - 73px);
+  height: calc(100vh - 73px);
+  overflow: hidden;
 }
 
 .sidebar {
   border-right: 1px solid var(--line);
   background: var(--panel);
   padding: 14px;
-  overflow: auto;
+  overflow-y: auto;
+  height: 100%;
 }
 
 .tool-group {
@@ -198,6 +223,10 @@ button:disabled {
 .field.is-selected {
   outline: 2px solid #ffb020;
   outline-offset: 1px;
+}
+
+.field.is-active {
+  outline-width: 3px;
 }
 
 .field .signature-image {
