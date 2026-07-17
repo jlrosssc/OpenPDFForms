@@ -212,6 +212,16 @@ inspector.addEventListener("input", () => {
   field.height = Math.max(1, numberValue(data.get("height"), field.height));
   field.options = (data.get("options") || "").split("\n").map((value) => value.trim()).filter(Boolean);
   field.required = data.get("required") === "on";
+  field.group = data.get("group") || "";
+  field.font_size = Math.max(1, numberValue(data.get("font_size"), field.font_size || 10));
+  field.max_length = Math.max(0, Math.round(numberValue(data.get("max_length"), field.max_length || 0)));
+  field.multiline = data.get("multiline") === "on";
+  field.comb = data.get("comb") === "on";
+  field.border_color = data.get("border_color_on") === "on" ? data.get("border_color") : "";
+  field.background_color = data.get("background_color_on") === "on" ? data.get("background_color") : "";
+  field.format = data.get("format") || "";
+  field.calc_operation = data.get("calc_operation") || "";
+  field.calc_fields = (data.get("calc_fields") || "").split(",").map((value) => value.trim()).filter(Boolean);
   renderFields();
 });
 
@@ -619,7 +629,23 @@ function syncInspector() {
   inspector.height.value = field ? round(field.height) : "";
   inspector.options.value = field?.options?.join("\n") || "";
   inspector.required.checked = Boolean(field?.required);
+  inspector.group.value = field?.group || "";
+  inspector.font_size.value = field ? field.font_size || 10 : "";
+  inspector.max_length.value = field ? field.max_length || 0 : "";
+  inspector.multiline.checked = Boolean(field?.multiline);
+  inspector.comb.checked = Boolean(field?.comb);
+  inspector.border_color_on.checked = Boolean(field?.border_color);
+  inspector.border_color.value = field?.border_color || "#1769aa";
+  inspector.background_color_on.checked = Boolean(field?.background_color);
+  inspector.background_color.value = field?.background_color || "#ffffff";
+  inspector.format.value = field?.format || "";
+  inspector.calc_operation.value = field?.calc_operation || "";
+  inspector.calc_fields.value = field?.calc_fields?.join(", ") || "";
   signatureButton.disabled = field?.type !== "signature";
+
+  const groupNames = [...new Set(state.fields.filter((item) => item.type === "radio" && item.group).map((item) => item.group))];
+  const datalist = document.querySelector("#group-suggestions");
+  datalist.innerHTML = groupNames.map((name) => `<option value="${escapeHtml(name)}"></option>`).join("");
 }
 
 function numberValue(value, fallback) {

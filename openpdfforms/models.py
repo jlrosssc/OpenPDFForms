@@ -32,6 +32,15 @@ class FormField(BaseModel):
     group: str = ""
     value: str = ""
     signature_data_url: str = ""
+    font_size: float = 10
+    multiline: bool = False
+    comb: bool = False
+    max_length: int = 0
+    border_color: str = ""
+    background_color: str = ""
+    format: str = ""
+    calc_operation: str = ""
+    calc_fields: list[str] = Field(default_factory=list)
 
 
 class DocumentInfo(BaseModel):

@@ -77,6 +77,43 @@
           <label>H<input name="height" type="number" step="0.1" min="1"></label>
         </div>
         <label>Options<textarea name="options" rows="3" placeholder="One dropdown option per line"></textarea></label>
+        <label>Group (radio buttons with the same group act as one choice)
+          <input name="group" list="group-suggestions">
+          <datalist id="group-suggestions"></datalist>
+        </label>
+        <div class="geometry-grid">
+          <label>Font size<input name="font_size" type="number" step="0.5" min="1"></label>
+          <label>Max length<input name="max_length" type="number" step="1" min="0"></label>
+        </div>
+        <label class="check"><input name="multiline" type="checkbox"> Multiline</label>
+        <label class="check"><input name="comb" type="checkbox"> Comb (evenly spaced characters)</label>
+        <div class="color-grid">
+          <label class="color-toggle"><input name="border_color_on" type="checkbox"><span>Border</span><input name="border_color" type="color" value="#1769aa"></label>
+          <label class="color-toggle"><input name="background_color_on" type="checkbox"><span>Background</span><input name="background_color" type="color" value="#ffffff"></label>
+        </div>
+        <label>Format
+          <select name="format">
+            <option value="">None</option>
+            <option value="number">Number</option>
+            <option value="integer">Integer</option>
+            <option value="percent">Percent</option>
+            <option value="currency">Currency</option>
+            <option value="date">Date</option>
+            <option value="zip">Zip code</option>
+            <option value="phone">Phone</option>
+          </select>
+        </label>
+        <label>Calculation
+          <select name="calc_operation">
+            <option value="">None</option>
+            <option value="sum">Sum</option>
+            <option value="average">Average</option>
+            <option value="product">Product</option>
+            <option value="min">Min</option>
+            <option value="max">Max</option>
+          </select>
+        </label>
+        <label>Calculation fields<input name="calc_fields" placeholder="Comma-separated field names"></label>
         <label class="check"><input name="required" type="checkbox"> Required</label>
         <button id="signature-button" type="button">Create Signature</button>
         <button id="delete-field" type="button">Delete Field</button>

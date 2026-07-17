@@ -164,6 +164,28 @@ button:disabled {
   align-items: center;
 }
 
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.inspector .color-toggle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.inspector .color-toggle input[type="color"] {
+  width: 32px;
+  height: 24px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  margin-left: auto;
+}
+
 .geometry-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
