@@ -87,7 +87,6 @@ function generateId() {
 const pages = document.querySelector("#pages");
 const pdfInput = document.querySelector("#pdf-input");
 const exportButton = document.querySelector("#export-button");
-const signButton = document.querySelector("#sign-button");
 const saveProjectButton = document.querySelector("#save-project-button");
 const openProjectButton = document.querySelector("#open-project-button");
 const inspector = document.querySelector("#field-form");
@@ -119,11 +118,6 @@ const distributeHButton = document.querySelector("#distribute-h");
 const distributeVButton = document.querySelector("#distribute-v");
 const duplicateButton = document.querySelector("#duplicate-field");
 const duplicateAllPagesButton = document.querySelector("#duplicate-all-pages");
-const signDialog = document.querySelector("#sign-dialog");
-const signNameInput = document.querySelector("#sign-name");
-const signReasonInput = document.querySelector("#sign-reason");
-const signLocationInput = document.querySelector("#sign-location");
-const confirmSignButton = document.querySelector("#confirm-sign");
 
 function appUrl(path) {
   return new URL(path, window.location.href).toString();
@@ -183,39 +177,6 @@ exportButton.addEventListener("click", async () => {
   }
   const payload = await response.json();
   window.location.href = appUrl(payload.download_url);
-});
-
-signButton.addEventListener("click", () => {
-  if (!state.documentId) return;
-  signDialog.showModal();
-});
-
-confirmSignButton.addEventListener("click", async () => {
-  if (!state.documentId) return;
-  confirmSignButton.disabled = true;
-  confirmSignButton.textContent = "Signing...";
-  try {
-    const response = await fetch(appUrl(`api/documents/${state.documentId}/sign`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fields: state.fields,
-        signer_name: signNameInput.value,
-        reason: signReasonInput.value,
-        location: signLocationInput.value,
-      }),
-    });
-    if (!response.ok) {
-      alert(await response.text());
-      return;
-    }
-    const payload = await response.json();
-    signDialog.close();
-    window.location.href = appUrl(payload.download_url);
-  } finally {
-    confirmSignButton.disabled = false;
-    confirmSignButton.textContent = "Apply Digital Signature";
-  }
 });
 
 saveProjectButton.addEventListener("click", saveProject);
@@ -441,7 +402,6 @@ function loadDocumentInfo(info) {
   state.future = [];
   state.zoom = 1;
   exportButton.disabled = false;
-  signButton.disabled = false;
   saveProjectButton.disabled = false;
   renderDocument(info.render_urls);
   applyZoom();
@@ -646,8 +606,8 @@ function placeField(type, pageElement, pageIndex, event) {
   const [pdfWidth, pdfHeight] = state.pageSizes[pageIndex];
   const scaleX = img.clientWidth / pdfWidth;
   const scaleY = img.clientHeight / pdfHeight;
-  const width = type === "checkbox" || type === "radio" ? 14 : 160;
-  const height = type === "checkbox" || type === "radio" ? 14 : 20;
+  const width = type === "checkbox" || type === "radio" ? 14 : type === "digital_signature" ? 200 : 160;
+  const height = type === "checkbox" || type === "radio" ? 14 : type === "digital_signature" ? 60 : 20;
   const x = Math.max(0, (event.clientX - rect.left) / scaleX - width / 2);
   const y = Math.max(0, (event.clientY - rect.top) / scaleY - height / 2);
   const id = generateId();

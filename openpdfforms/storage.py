@@ -11,11 +11,10 @@ UPLOAD_ROOT = DATA_ROOT / "uploads"
 RENDER_ROOT = DATA_ROOT / "renders"
 EXPORT_ROOT = DATA_ROOT / "exports"
 PROJECT_ROOT = DATA_ROOT / "projects"
-SIGNING_ROOT = DATA_ROOT / "signing"
 
 
 def ensure_data_dirs() -> None:
-    for path in (UPLOAD_ROOT, RENDER_ROOT, EXPORT_ROOT, PROJECT_ROOT, SIGNING_ROOT):
+    for path in (UPLOAD_ROOT, RENDER_ROOT, EXPORT_ROOT, PROJECT_ROOT):
         path.mkdir(parents=True, exist_ok=True)
 
 
@@ -42,10 +41,6 @@ def reset_render_dir(document_id: str) -> Path:
 
 def export_path(document_id: str) -> Path:
     return EXPORT_ROOT / f"{document_id}-fillable.pdf"
-
-
-def signed_export_path(document_id: str) -> Path:
-    return EXPORT_ROOT / f"{document_id}-signed.pdf"
 
 
 def project_path(document_id: str) -> Path:

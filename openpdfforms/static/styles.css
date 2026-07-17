@@ -247,6 +247,17 @@ button:disabled {
   border-color: #2f7d54;
 }
 
+.field[data-type="digital_signature"] {
+  border: 2px dashed #7c3aed;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(124, 58, 237, .12),
+    rgba(124, 58, 237, .12) 8px,
+    rgba(124, 58, 237, .22) 8px,
+    rgba(124, 58, 237, .22) 16px
+  );
+}
+
 .field.is-selected {
   outline: 2px solid #ffb020;
   outline-offset: 1px;

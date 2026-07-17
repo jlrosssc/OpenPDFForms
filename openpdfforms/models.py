@@ -13,6 +13,7 @@ class FieldType(str, Enum):
     radio = "radio"
     dropdown = "dropdown"
     signature = "signature"
+    digital_signature = "digital_signature"
     date = "date"
 
 
@@ -58,13 +59,6 @@ class ExportRequest(BaseModel):
 
 class ExportResponse(BaseModel):
     download_url: str
-
-
-class SignRequest(BaseModel):
-    fields: list[FormField]
-    signer_name: str = ""
-    reason: str = ""
-    location: str = ""
 
 
 class ProjectSummary(BaseModel):

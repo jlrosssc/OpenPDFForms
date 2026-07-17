@@ -77,6 +77,9 @@ def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormFie
             elif field.type == FieldType.dropdown:
                 widget.field_type = fitz.PDF_WIDGET_TYPE_COMBOBOX
                 widget.choice_values = field.options or [""]
+            elif field.type == FieldType.digital_signature:
+                widget.field_type = fitz.PDF_WIDGET_TYPE_SIGNATURE
+                widget.field_label = widget.field_label or "Digital Signature"
             else:
                 widget.field_type = fitz.PDF_WIDGET_TYPE_TEXT
 

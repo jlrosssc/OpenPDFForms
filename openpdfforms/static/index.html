@@ -27,7 +27,6 @@
         <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
       </div>
       <button id="export-button" disabled>Export Fillable PDF</button>
-      <button id="sign-button" type="button" disabled>Digital Signature</button>
     </div>
   </header>
 
@@ -41,6 +40,7 @@
         <button data-add="radio">+ Radio</button>
         <button data-add="dropdown">+ Dropdown</button>
         <button data-add="signature">+ Simulated Signature</button>
+        <button data-add="digital_signature" title="Places an empty, unsigned PDF signature field. Whoever fills out and signs the form later (in Acrobat or another compatible viewer, with their own signing identity) locks the document at that point -- this app never signs or locks anything itself.">+ Digital Signature</button>
         <button data-add="date">+ Date</button>
       </div>
       <div class="tool-group" id="arrange-group">
@@ -68,6 +68,7 @@
             <option value="radio">Radio</option>
             <option value="dropdown">Dropdown</option>
             <option value="signature">Simulated Signature</option>
+            <option value="digital_signature">Digital Signature</option>
             <option value="date">Date</option>
           </select>
         </label>
@@ -158,22 +159,6 @@
       <footer>
         <button id="clear-signature" type="button">Clear</button>
         <button id="apply-signature" type="button">Apply Simulated Signature</button>
-      </footer>
-    </form>
-  </dialog>
-
-  <dialog id="sign-dialog" class="modal">
-    <form method="dialog">
-      <header>
-        <h2>Add Digital Signature</h2>
-        <button value="cancel" aria-label="Close">x</button>
-      </header>
-      <p class="hint">Signs with this server's local certificate. PDF viewers will show the signature as cryptographically valid but not from a trusted authority unless a CA-issued certificate is installed.</p>
-      <label>Signer name<input id="sign-name"></label>
-      <label>Reason<input id="sign-reason" placeholder="e.g. I approve this document"></label>
-      <label>Location<input id="sign-location" placeholder="e.g. City, State"></label>
-      <footer>
-        <button id="confirm-sign" type="button">Apply Digital Signature</button>
       </footer>
     </form>
   </dialog>
