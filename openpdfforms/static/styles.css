@@ -178,6 +178,7 @@ button:disabled {
   max-width: min(100%, 980px);
   height: auto;
   user-select: none;
+  -webkit-user-drag: none;
 }
 
 .field {

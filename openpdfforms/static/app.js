@@ -144,6 +144,7 @@ function renderDocument(renderUrls) {
     });
     const img = document.createElement("img");
     img.src = url;
+    img.draggable = false;
     img.onload = renderFields;
     page.appendChild(img);
     pages.appendChild(page);
