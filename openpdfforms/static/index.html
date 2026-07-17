@@ -20,6 +20,7 @@
       <button id="open-project-button" type="button">Open Project</button>
       <button id="save-project-button" type="button" disabled>Save Project</button>
       <button id="export-button" disabled>Export Fillable PDF</button>
+      <button id="sign-button" type="button" disabled>Sign &amp; Export</button>
     </div>
   </header>
 
@@ -99,6 +100,22 @@
       <footer>
         <button id="clear-signature" type="button">Clear</button>
         <button id="apply-signature" type="button">Apply Signature</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="sign-dialog" class="modal">
+    <form method="dialog">
+      <header>
+        <h2>Digitally Sign &amp; Export</h2>
+        <button value="cancel" aria-label="Close">x</button>
+      </header>
+      <p class="hint">Signs with this server's local certificate. PDF viewers will show the signature as cryptographically valid but not from a trusted authority unless a CA-issued certificate is installed.</p>
+      <label>Signer name<input id="sign-name"></label>
+      <label>Reason<input id="sign-reason" placeholder="e.g. I approve this document"></label>
+      <label>Location<input id="sign-location" placeholder="e.g. City, State"></label>
+      <footer>
+        <button id="confirm-sign" type="button">Sign &amp; Download</button>
       </footer>
     </form>
   </dialog>
