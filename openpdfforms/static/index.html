@@ -20,7 +20,7 @@
       <button id="open-project-button" type="button">Open Project</button>
       <button id="save-project-button" type="button" disabled>Save Project</button>
       <button id="export-button" disabled>Export Fillable PDF</button>
-      <button id="sign-button" type="button" disabled>Sign &amp; Export</button>
+      <button id="sign-button" type="button" disabled>Digital Signature</button>
     </div>
   </header>
 
@@ -33,7 +33,7 @@
         <button data-add="checkbox">+ Checkbox</button>
         <button data-add="radio">+ Radio</button>
         <button data-add="dropdown">+ Dropdown</button>
-        <button data-add="signature">+ Signature</button>
+        <button data-add="signature">+ Simulated Signature</button>
         <button data-add="date">+ Date</button>
       </div>
       <form id="field-form" class="inspector">
@@ -46,7 +46,7 @@
             <option value="checkbox">Checkbox</option>
             <option value="radio">Radio</option>
             <option value="dropdown">Dropdown</option>
-            <option value="signature">Signature</option>
+            <option value="signature">Simulated Signature</option>
             <option value="date">Date</option>
           </select>
         </label>
@@ -58,7 +58,7 @@
         </div>
         <label>Options<textarea name="options" rows="3" placeholder="One dropdown option per line"></textarea></label>
         <label class="check"><input name="required" type="checkbox"> Required</label>
-        <button id="signature-button" type="button">Create Signature</button>
+        <button id="signature-button" type="button">Create Simulated Signature</button>
         <button id="delete-field" type="button">Delete Field</button>
       </form>
     </aside>
@@ -83,7 +83,7 @@
   <dialog id="signature-dialog" class="modal signature-modal">
     <form method="dialog">
       <header>
-        <h2>Create Signature</h2>
+        <h2>Create Simulated Signature</h2>
         <button value="cancel" aria-label="Close">x</button>
       </header>
       <div class="signature-tabs">
@@ -94,12 +94,12 @@
         <canvas id="signature-canvas" width="720" height="220"></canvas>
       </section>
       <section id="signature-type-panel" hidden>
-        <input id="signature-text" placeholder="Type your signature">
+        <input id="signature-text" placeholder="Type your simulated signature">
         <div id="signature-preview" class="signature-preview"></div>
       </section>
       <footer>
         <button id="clear-signature" type="button">Clear</button>
-        <button id="apply-signature" type="button">Apply Signature</button>
+        <button id="apply-signature" type="button">Apply Simulated Signature</button>
       </footer>
     </form>
   </dialog>
@@ -107,7 +107,7 @@
   <dialog id="sign-dialog" class="modal">
     <form method="dialog">
       <header>
-        <h2>Digitally Sign &amp; Export</h2>
+        <h2>Add Digital Signature</h2>
         <button value="cancel" aria-label="Close">x</button>
       </header>
       <p class="hint">Signs with this server's local certificate. PDF viewers will show the signature as cryptographically valid but not from a trusted authority unless a CA-issued certificate is installed.</p>
@@ -115,7 +115,7 @@
       <label>Reason<input id="sign-reason" placeholder="e.g. I approve this document"></label>
       <label>Location<input id="sign-location" placeholder="e.g. City, State"></label>
       <footer>
-        <button id="confirm-sign" type="button">Sign &amp; Download</button>
+        <button id="confirm-sign" type="button">Apply Digital Signature</button>
       </footer>
     </form>
   </dialog>

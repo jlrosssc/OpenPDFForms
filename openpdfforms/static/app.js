@@ -119,7 +119,7 @@ confirmSignButton.addEventListener("click", async () => {
     window.location.href = appUrl(payload.download_url);
   } finally {
     confirmSignButton.disabled = false;
-    confirmSignButton.textContent = "Sign & Download";
+    confirmSignButton.textContent = "Apply Digital Signature";
   }
 });
 

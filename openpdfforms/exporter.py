@@ -26,7 +26,7 @@ def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormFie
             if field.type in {FieldType.text, FieldType.signature, FieldType.date}:
                 widget.field_type = fitz.PDF_WIDGET_TYPE_TEXT
                 if field.type == FieldType.signature:
-                    widget.field_label = widget.field_label or "Signature"
+                    widget.field_label = widget.field_label or "Simulated Signature"
                 if field.type == FieldType.date:
                     widget.field_label = widget.field_label or "Date"
             elif field.type == FieldType.checkbox:
