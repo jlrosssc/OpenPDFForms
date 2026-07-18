@@ -61,6 +61,16 @@ class ExportResponse(BaseModel):
     download_url: str
 
 
+class FillSignRequest(BaseModel):
+    fields: list[FormField]
+    sign_field_name: str
+    kind: str
+    signer_name: str = ""
+    reason: str = ""
+    location: str = ""
+    signature_image_data_url: str = ""
+
+
 class ProjectSummary(BaseModel):
     document_id: str
     filename: str

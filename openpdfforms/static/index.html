@@ -27,20 +27,27 @@
         <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
       </div>
       <button id="export-button" disabled>Export Fillable PDF</button>
+      <button id="fill-mode-button" type="button" disabled>Fill &amp; Sign</button>
     </div>
   </header>
 
   <main class="workspace">
     <aside class="sidebar">
-      <div class="tool-group">
+      <div class="tool-group" id="fill-mode-panel" hidden>
+        <h2>Fill &amp; Sign</h2>
+        <p class="hint">Type into the fields on the document. Click a Mock Sign or E Sign box to sign it -- that locks the document at that point, but other unsigned fields can still be filled and signed afterward.</p>
+        <button id="back-to-design-button" type="button">Back to Design</button>
+        <button id="download-working-button" type="button">Download Current Copy</button>
+      </div>
+      <div class="tool-group" id="add-field-panel">
         <h2>Add Field</h2>
         <p class="hint">Click a type, then click where you want it. Double-click a type to keep placing several in a row. Press Esc to cancel.</p>
         <button data-add="text">+ Text</button>
         <button data-add="checkbox">+ Checkbox</button>
         <button data-add="radio">+ Radio</button>
         <button data-add="dropdown">+ Dropdown</button>
-        <button data-add="signature">+ Simulated Signature</button>
-        <button data-add="digital_signature" title="Places an empty, unsigned PDF signature field. Whoever fills out and signs the form later (in Acrobat or another compatible viewer, with their own signing identity) locks the document at that point -- this app never signs or locks anything itself.">+ Digital Signature</button>
+        <button data-add="signature" title="A signature box that's signed later, in Fill &amp; Sign mode, by typing a name rendered in a script font. Locks the document at that point.">+ Mock Sign</button>
+        <button data-add="digital_signature" title="A signature box that's signed later, in Fill &amp; Sign mode, with a real cryptographic signature for tracking/traceability. Locks the document at that point.">+ E Sign</button>
         <button data-add="date">+ Date</button>
       </div>
       <div class="tool-group" id="arrange-group">
@@ -67,8 +74,8 @@
             <option value="checkbox">Checkbox</option>
             <option value="radio">Radio</option>
             <option value="dropdown">Dropdown</option>
-            <option value="signature">Simulated Signature</option>
-            <option value="digital_signature">Digital Signature</option>
+            <option value="signature">Mock Sign</option>
+            <option value="digital_signature">E Sign</option>
             <option value="date">Date</option>
           </select>
         </label>
@@ -117,7 +124,6 @@
         </label>
         <label>Calculation fields<input name="calc_fields" placeholder="Comma-separated field names"></label>
         <label class="check"><input name="required" type="checkbox"> Required</label>
-        <button id="signature-button" type="button">Create Simulated Signature</button>
         <button id="delete-field" type="button">Delete Field</button>
       </form>
     </aside>
@@ -142,7 +148,7 @@
   <dialog id="signature-dialog" class="modal signature-modal">
     <form method="dialog">
       <header>
-        <h2>Create Simulated Signature</h2>
+        <h2>Mock Sign</h2>
         <button value="cancel" aria-label="Close">x</button>
       </header>
       <div class="signature-tabs">
@@ -153,12 +159,28 @@
         <canvas id="signature-canvas" width="720" height="220"></canvas>
       </section>
       <section id="signature-type-panel" hidden>
-        <input id="signature-text" placeholder="Type your simulated signature">
+        <input id="signature-text" placeholder="Type your name">
         <div id="signature-preview" class="signature-preview"></div>
       </section>
       <footer>
         <button id="clear-signature" type="button">Clear</button>
-        <button id="apply-signature" type="button">Apply Simulated Signature</button>
+        <button id="apply-signature" type="button">Sign</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="esign-dialog" class="modal">
+    <form method="dialog">
+      <header>
+        <h2>E Sign</h2>
+        <button value="cancel" aria-label="Close">x</button>
+      </header>
+      <p class="hint">Applies a real cryptographic signature and locks the document at this point.</p>
+      <label>Signer name<input id="esign-name"></label>
+      <label>Reason<input id="esign-reason" placeholder="e.g. Approved"></label>
+      <label>Location<input id="esign-location" placeholder="e.g. City, State"></label>
+      <footer>
+        <button id="confirm-esign" type="button">Sign</button>
       </footer>
     </form>
   </dialog>

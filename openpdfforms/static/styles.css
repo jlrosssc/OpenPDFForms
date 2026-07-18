@@ -118,6 +118,10 @@ button:disabled {
   gap: 8px;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .tool-group h2, .inspector h2 {
   grid-column: 1 / -1;
   margin: 6px 0;
@@ -417,4 +421,45 @@ button:disabled {
   padding: 12px;
   font-family: "Snell Roundhand", "Brush Script MT", "Segoe Script", cursive;
   font-size: 48px;
+}
+
+.fill-input {
+  position: absolute;
+  border: 1px solid rgba(23, 105, 170, .5);
+  background: rgba(255, 255, 255, .85);
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-size: 12px;
+}
+
+textarea.fill-input {
+  resize: none;
+}
+
+.fill-sign-box {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 2px dashed #7c3aed;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(124, 58, 237, .12),
+    rgba(124, 58, 237, .12) 8px,
+    rgba(124, 58, 237, .22) 8px,
+    rgba(124, 58, 237, .22) 16px
+  );
+  color: #5b21b6;
+}
+
+.fill-sign-box.is-signed {
+  cursor: default;
+  border-style: solid;
+  border-color: #2f7d54;
+  background: rgba(61, 132, 92, .18);
+  color: #1f5c39;
 }

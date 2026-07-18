@@ -11,7 +11,8 @@ from fastapi.staticfiles import StaticFiles
 
 from .detector import detect_fields, render_pdf_pages
 from .exporter import export_fillable_pdf
-from .models import DocumentInfo, ExportRequest, ExportResponse, ProjectSaveRequest, ProjectSummary
+from .models import DocumentInfo, ExportRequest, ExportResponse, FillSignRequest, ProjectSaveRequest, ProjectSummary
+from .signing import apply_field_values, sign_field
 from .storage import (
     EXPORT_ROOT,
     RENDER_ROOT,
@@ -22,6 +23,7 @@ from .storage import (
     new_document_id,
     project_path,
     reset_render_dir,
+    working_pdf_path,
 )
 
 
@@ -86,6 +88,40 @@ def download_document(document_id: str) -> FileResponse:
     if not output_path.exists():
         raise HTTPException(status_code=404, detail="Export not found.")
     return FileResponse(output_path, media_type="application/pdf", filename=output_path.name)
+
+
+@app.post("/api/documents/{document_id}/fill-and-sign", response_model=ExportResponse)
+def fill_and_sign(document_id: str, request: FillSignRequest) -> ExportResponse:
+    matches = list(UPLOAD_ROOT.glob(f"{document_id}.*"))
+    if not matches:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    working = working_pdf_path(document_id)
+    if not working.exists():
+        export_fillable_pdf(matches[0], working, request.fields)
+
+    filled = working.with_name(f"{working.stem}-filling.pdf")
+    apply_field_values(working, filled, request.fields)
+    sign_field(
+        filled,
+        working,
+        field_name=request.sign_field_name,
+        kind=request.kind,
+        signer_name=request.signer_name,
+        reason=request.reason,
+        location=request.location,
+        signature_image_data_url=request.signature_image_data_url,
+    )
+    filled.unlink(missing_ok=True)
+    return ExportResponse(download_url=f"api/documents/{document_id}/download-working")
+
+
+@app.get("/api/documents/{document_id}/download-working")
+def download_working_document(document_id: str) -> FileResponse:
+    working = working_pdf_path(document_id)
+    if not working.exists():
+        raise HTTPException(status_code=404, detail="No filled or signed copy yet.")
+    return FileResponse(working, media_type="application/pdf", filename=f"{document_id}-signed.pdf")
 
 
 @app.put("/api/projects/{document_id}", response_model=ProjectSummary)

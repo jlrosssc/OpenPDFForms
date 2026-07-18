@@ -14,6 +14,9 @@ const state = {
   history: [],
   future: [],
   inspectorDirty: false,
+  mode: "design",
+  pendingSignField: null,
+  signedFields: new Set(),
 };
 
 const MAX_HISTORY = 50;
@@ -91,7 +94,6 @@ const saveProjectButton = document.querySelector("#save-project-button");
 const openProjectButton = document.querySelector("#open-project-button");
 const inspector = document.querySelector("#field-form");
 const deleteButton = document.querySelector("#delete-field");
-const signatureButton = document.querySelector("#signature-button");
 const projectDialog = document.querySelector("#project-dialog");
 const projectList = document.querySelector("#project-list");
 const signatureDialog = document.querySelector("#signature-dialog");
@@ -118,6 +120,17 @@ const distributeHButton = document.querySelector("#distribute-h");
 const distributeVButton = document.querySelector("#distribute-v");
 const duplicateButton = document.querySelector("#duplicate-field");
 const duplicateAllPagesButton = document.querySelector("#duplicate-all-pages");
+const fillModeButton = document.querySelector("#fill-mode-button");
+const fillModePanel = document.querySelector("#fill-mode-panel");
+const backToDesignButton = document.querySelector("#back-to-design-button");
+const downloadWorkingButton = document.querySelector("#download-working-button");
+const addFieldPanel = document.querySelector("#add-field-panel");
+const arrangeGroupPanel = document.querySelector("#arrange-group");
+const esignDialog = document.querySelector("#esign-dialog");
+const esignNameInput = document.querySelector("#esign-name");
+const esignReasonInput = document.querySelector("#esign-reason");
+const esignLocationInput = document.querySelector("#esign-location");
+const confirmEsignButton = document.querySelector("#confirm-esign");
 
 function appUrl(path) {
   return new URL(path, window.location.href).toString();
@@ -181,9 +194,15 @@ exportButton.addEventListener("click", async () => {
 
 saveProjectButton.addEventListener("click", saveProject);
 openProjectButton.addEventListener("click", openProjectChooser);
-signatureButton.addEventListener("click", openSignatureDialog);
 clearSignatureButton.addEventListener("click", clearSignature);
-applySignatureButton.addEventListener("click", applySignature);
+applySignatureButton.addEventListener("click", confirmMockSign);
+confirmEsignButton.addEventListener("click", confirmEsign);
+fillModeButton.addEventListener("click", enterFillMode);
+backToDesignButton.addEventListener("click", exitFillMode);
+downloadWorkingButton.addEventListener("click", () => {
+  if (!state.documentId) return;
+  window.location.href = appUrl(`api/documents/${state.documentId}/download-working`);
+});
 
 document.querySelectorAll("[data-signature-tab]").forEach((button) => {
   button.addEventListener("click", () => setSignatureMode(button.dataset.signatureTab));
@@ -401,8 +420,12 @@ function loadDocumentInfo(info) {
   state.history = [];
   state.future = [];
   state.zoom = 1;
+  state.mode = "design";
+  state.pendingSignField = null;
+  state.signedFields = new Set();
   exportButton.disabled = false;
   saveProjectButton.disabled = false;
+  fillModeButton.disabled = false;
   renderDocument(info.render_urls);
   applyZoom();
   syncInspector();
@@ -416,6 +439,7 @@ function renderDocument(renderUrls) {
     page.className = "page";
     page.dataset.page = pageIndex;
     page.addEventListener("click", (event) => {
+      if (state.mode === "fill") return;
       if (state.pendingType) {
         placeField(state.pendingType, page, pageIndex, event);
         return;
@@ -426,9 +450,119 @@ function renderDocument(renderUrls) {
     const img = document.createElement("img");
     img.src = url;
     img.draggable = false;
-    img.onload = renderFields;
+    img.onload = () => (state.mode === "fill" ? renderFillFields() : renderFields());
     page.appendChild(img);
     pages.appendChild(page);
+  });
+}
+
+function enterFillMode() {
+  if (!state.documentId) return;
+  state.mode = "fill";
+  clearSelection();
+  addFieldPanel.hidden = true;
+  arrangeGroupPanel.hidden = true;
+  inspector.hidden = true;
+  fillModePanel.hidden = false;
+  renderFillFields();
+}
+
+function exitFillMode() {
+  state.mode = "design";
+  addFieldPanel.hidden = false;
+  arrangeGroupPanel.hidden = false;
+  inspector.hidden = false;
+  fillModePanel.hidden = true;
+  renderFields();
+}
+
+function renderFillFields() {
+  document.querySelectorAll(".field, .fill-input, .fill-sign-box").forEach((el) => el.remove());
+  state.fields.forEach((field) => {
+    const page = document.querySelector(`.page[data-page="${field.page}"]`);
+    if (!page) return;
+    const img = page.querySelector("img");
+    const [pdfWidth, pdfHeight] = state.pageSizes[field.page];
+    const scaleX = img.clientWidth / pdfWidth;
+    const scaleY = img.clientHeight / pdfHeight;
+    const style = (el) => {
+      el.style.left = `${field.x * scaleX}px`;
+      el.style.top = `${field.y * scaleY}px`;
+      el.style.width = `${field.width * scaleX}px`;
+      el.style.height = `${field.height * scaleY}px`;
+    };
+
+    if (field.type === "signature" || field.type === "digital_signature") {
+      const box = document.createElement("div");
+      box.className = `fill-sign-box fill-sign-box-${field.type}`;
+      style(box);
+      const signed = state.signedFields.has(field.name);
+      box.textContent = signed ? "Signed" : field.type === "signature" ? "Click to Mock Sign" : "Click to E Sign";
+      if (signed) {
+        box.classList.add("is-signed");
+      } else {
+        box.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (field.type === "signature") {
+            openMockSignDialog(field);
+          } else {
+            openEsignDialog(field);
+          }
+        });
+      }
+      page.appendChild(box);
+      return;
+    }
+
+    let input;
+    if (field.type === "checkbox") {
+      input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = field.value === "Yes";
+      input.addEventListener("change", () => {
+        field.value = input.checked ? "Yes" : "Off";
+      });
+    } else if (field.type === "radio") {
+      input = document.createElement("input");
+      input.type = "radio";
+      input.name = `fill-radio-${field.group || field.name}`;
+      input.checked = field.value === "Yes";
+      input.addEventListener("change", () => {
+        state.fields
+          .filter((item) => item.type === "radio" && item.group === field.group)
+          .forEach((item) => {
+            item.value = item.id === field.id ? "Yes" : "Off";
+          });
+      });
+    } else if (field.type === "dropdown") {
+      input = document.createElement("select");
+      (field.options || []).forEach((option) => {
+        const opt = document.createElement("option");
+        opt.value = option;
+        opt.textContent = option;
+        input.appendChild(opt);
+      });
+      input.value = field.value || "";
+      input.addEventListener("change", () => {
+        field.value = input.value;
+      });
+    } else if (field.multiline) {
+      input = document.createElement("textarea");
+      input.value = field.value || "";
+      input.addEventListener("input", () => {
+        field.value = input.value;
+      });
+    } else {
+      input = document.createElement("input");
+      input.type = "text";
+      input.value = field.value || "";
+      input.addEventListener("input", () => {
+        field.value = input.value;
+      });
+    }
+    input.className = "fill-input";
+    style(input);
+    page.appendChild(input);
   });
 }
 
@@ -705,7 +839,6 @@ function syncInspector() {
   inspector.format.value = field?.format || "";
   inspector.calc_operation.value = field?.calc_operation || "";
   inspector.calc_fields.value = field?.calc_fields?.join(", ") || "";
-  signatureButton.disabled = field?.type !== "signature";
 
   const groupNames = [...new Set(state.fields.filter((item) => item.type === "radio" && item.group).map((item) => item.group))];
   const datalist = document.querySelector("#group-suggestions");
@@ -782,17 +915,9 @@ async function openProject(documentId) {
   projectDialog.close();
 }
 
-function openSignatureDialog() {
-  const field = selectedField();
-  if (!field || field.type !== "signature") return;
+function openMockSignDialog(field) {
+  state.pendingSignField = field.name;
   clearSignature();
-  if (field.signature_data_url) {
-    const image = new Image();
-    image.onload = () => {
-      signatureContext.drawImage(image, 0, 0, signatureCanvas.width, signatureCanvas.height);
-    };
-    image.src = field.signature_data_url;
-  }
   signatureDialog.showModal();
 }
 
@@ -834,12 +959,56 @@ function startSignatureDraw(event) {
   signatureCanvas.addEventListener("pointerup", stop);
 }
 
-function applySignature() {
-  const field = selectedField();
-  if (!field || field.type !== "signature") return;
-  field.signature_data_url = state.signatureMode === "type" ? typedSignatureDataUrl() : signatureCanvas.toDataURL("image/png");
+function confirmMockSign() {
+  const field = state.fields.find((item) => item.name === state.pendingSignField);
+  if (!field) return;
+  const dataUrl = state.signatureMode === "type" ? typedSignatureDataUrl() : signatureCanvas.toDataURL("image/png");
+  const signerName = state.signatureMode === "type" ? signatureText.value : field.name;
   signatureDialog.close();
-  renderFields();
+  submitFillAndSign(field.name, "mock", { signer_name: signerName, signature_image_data_url: dataUrl });
+}
+
+function openEsignDialog(field) {
+  state.pendingSignField = field.name;
+  esignNameInput.value = "";
+  esignReasonInput.value = "";
+  esignLocationInput.value = "";
+  esignDialog.showModal();
+}
+
+function confirmEsign() {
+  const field = state.fields.find((item) => item.name === state.pendingSignField);
+  if (!field) return;
+  esignDialog.close();
+  submitFillAndSign(field.name, "esign", {
+    signer_name: esignNameInput.value,
+    reason: esignReasonInput.value,
+    location: esignLocationInput.value,
+  });
+}
+
+async function submitFillAndSign(fieldName, kind, extra) {
+  const response = await fetch(appUrl(`api/documents/${state.documentId}/fill-and-sign`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fields: state.fields,
+      sign_field_name: fieldName,
+      kind,
+      signer_name: "",
+      reason: "",
+      location: "",
+      signature_image_data_url: "",
+      ...extra,
+    }),
+  });
+  if (!response.ok) {
+    alert(await response.text());
+    return;
+  }
+  state.signedFields.add(fieldName);
+  state.pendingSignField = null;
+  renderFillFields();
 }
 
 function typedSignatureDataUrl() {
