@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-OpenPDFForms is licensed under GPL-2.0-or-later (see `LICENSE`). It depends
+OpenPDFForms is licensed under AGPL-3.0-or-later (see `LICENSE`). It depends
 on the following third-party libraries, each under its own license:
 
 | Library | License | Project |
@@ -29,3 +29,33 @@ https://github.com/jlrosssc/OpenPDFForms
 If you deploy a modified version of OpenPDFForms and make it available to
 other users over a network, AGPL-3.0 (via PyMuPDF) requires you to offer
 those users the source of your modified version as well.
+
+If you cannot satisfy AGPL-3.0 obligations for a deployment, use a
+commercial PyMuPDF license from Artifex instead of the free AGPL-3.0
+license.
+
+## Python Dependency Notes
+
+The pinned packages in `requirements.txt` may install additional
+transitive dependencies. Those dependencies remain under their own
+licenses. Common examples include Starlette, AnyIO, Click, h11,
+httptools, watchfiles, websockets, cffi, pycparser, asn1crypto,
+tzlocal, PyYAML, qrcode, and related packages pulled in by FastAPI,
+Uvicorn, pyHanko, cryptography, and their extras.
+
+When distributing a built Docker image or other binary artifact, include
+the license notices for both the direct and transitive packages present
+in that artifact.
+
+## Separate Container Images
+
+The optional deployment files can run separate services alongside
+OpenPDFForms:
+
+| Service | Image | Notice |
+|---|---|---|
+| nginx reverse proxy | `nginx:1.27-alpine` | nginx and Alpine Linux remain under their own licenses. |
+| Stirling PDF | `docker.stirlingpdf.com/stirlingtools/stirling-pdf:latest-fat` | Stirling PDF is a separate open-core PDF application under its own licensing. |
+
+These services are not bundled as source code in this repository. Review
+the license terms for the exact container image versions you deploy.

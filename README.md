@@ -51,10 +51,16 @@ When a signature is applied to a signature field, export embeds it as visible PD
 
 ## License
 
-OpenPDFForms is licensed under GPL-2.0-or-later (see `LICENSE`). The
-"or-later" grant is what makes it compatible with dependencies licensed
-under Apache-2.0 (e.g. `opencv-python-headless`, `python-multipart`),
-which GPL-2.0-only is not compatible with under the FSF's own guidance.
+OpenPDFForms is licensed under AGPL-3.0-or-later (see `LICENSE`).
+
+This project uses PyMuPDF under its free AGPL-3.0-or-later license. If
+you make OpenPDFForms or a modified version available to other users
+over a network, AGPL-3.0 requires that those users can access the
+corresponding source code for the version they are using. The bundled
+web interface includes a **Source** link for this purpose.
+
+If you cannot satisfy AGPL-3.0 obligations for your use case, obtain a
+commercial PyMuPDF license from Artifex before deploying the app.
 
 ## Third-Party Licenses
 
