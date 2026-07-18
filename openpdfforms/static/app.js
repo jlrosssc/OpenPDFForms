@@ -157,6 +157,49 @@ pdfInput.addEventListener("change", async () => {
 document.querySelectorAll("[data-add]").forEach((button) => {
   button.addEventListener("click", () => startPlacing(button.dataset.add));
   button.addEventListener("dblclick", () => startPlacing(button.dataset.add, true));
+  button.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    dragPlace = { type: button.dataset.add, startX: event.clientX, startY: event.clientY, moved: false, pointerId: event.pointerId };
+    button.setPointerCapture(event.pointerId);
+  });
+});
+
+// Supports pressing a field button and dragging straight onto the document in one
+// motion. A plain click still arms click-then-click placement via the listener
+// above -- native click semantics only fire on matching mousedown+mouseup targets,
+// so this never double-places: a drag's mouseup lands off the button entirely.
+let dragPlace = null;
+
+document.addEventListener("pointermove", (event) => {
+  if (!dragPlace || dragPlace.pointerId !== event.pointerId) return;
+  if (dragPlace.moved) return;
+  const dx = event.clientX - dragPlace.startX;
+  const dy = event.clientY - dragPlace.startY;
+  if (Math.hypot(dx, dy) <= 6) return;
+  dragPlace.moved = true;
+  pages.classList.add("placing");
+  document.querySelectorAll("[data-add]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.add === dragPlace.type);
+  });
+});
+
+document.addEventListener("pointerup", (event) => {
+  if (!dragPlace || dragPlace.pointerId !== event.pointerId) return;
+  if (dragPlace.moved) {
+    const target = document.elementFromPoint(event.clientX, event.clientY);
+    const pageElement = target ? target.closest(".page") : null;
+    if (pageElement && state.documentId) {
+      placeField(dragPlace.type, pageElement, Number(pageElement.dataset.page), event);
+    }
+    stopPlacing();
+  }
+  dragPlace = null;
+});
+
+document.addEventListener("pointercancel", (event) => {
+  if (!dragPlace || dragPlace.pointerId !== event.pointerId) return;
+  if (dragPlace.moved) stopPlacing();
+  dragPlace = null;
 });
 
 document.addEventListener("keydown", (event) => {
