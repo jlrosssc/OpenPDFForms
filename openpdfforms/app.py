@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from .detector import detect_fields, render_pdf_pages
 from .exporter import export_fillable_pdf
 from .models import DocumentInfo, ExportRequest, ExportResponse, FillSignRequest, ProjectSaveRequest, ProjectSummary
-from .signing import apply_field_values, sign_field
+from .signing import CA_CERT_PATH, apply_field_values, ensure_root_ca, sign_field
 from .storage import (
     EXPORT_ROOT,
     RENDER_ROOT,
@@ -122,6 +122,18 @@ def download_working_document(document_id: str) -> FileResponse:
     if not working.exists():
         raise HTTPException(status_code=404, detail="No filled or signed copy yet.")
     return FileResponse(working, media_type="application/pdf", filename=f"{document_id}-signed.pdf")
+
+
+@app.get("/api/trust-certificate")
+def download_trust_certificate() -> FileResponse:
+    """Serve only the root CA's public certificate -- never the private key.
+
+    Installing this file as a trusted root (macOS Keychain, Windows
+    Certificate Manager, etc.) is what makes E Sign signatures produced by
+    this server validate as trusted rather than merely tamper-evident.
+    """
+    ensure_root_ca()
+    return FileResponse(CA_CERT_PATH, media_type="application/x-x509-ca-cert", filename="openpdfforms-trust-root.pem")
 
 
 @app.put("/api/projects/{document_id}", response_model=ProjectSummary)

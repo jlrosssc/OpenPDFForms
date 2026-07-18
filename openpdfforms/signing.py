@@ -24,19 +24,24 @@ from pyhanko.sign.signers.pdf_signer import PdfSignatureMetadata
 from .models import FieldType, FormField
 from .storage import SIGNING_ROOT
 
+CA_CERT_PATH = SIGNING_ROOT / "ca-cert.pem"
+CA_KEY_PATH = SIGNING_ROOT / "ca-key.pem"
 CERT_PATH = SIGNING_ROOT / "cert.pem"
 KEY_PATH = SIGNING_ROOT / "key.pem"
 
 
-def ensure_signing_identity(common_name: str = "OpenPDFForms Local Signer") -> tuple[Path, Path]:
-    """Return (cert_path, key_path), generating a self-signed identity on first use.
+def ensure_root_ca(common_name: str = "OpenPDFForms Root CA") -> tuple[Path, Path]:
+    """Return (ca_cert_path, ca_key_path), generating a self-signed root CA on first use.
 
-    Self-signed: PDF viewers will treat the signature as cryptographically
-    valid (tamper-evident) but not as issued by a trusted authority.
+    This root is the trust anchor: its private key never leaves the server,
+    and its public certificate is the one artifact an organization installs
+    on its own machines (as a trusted root) so E Sign signatures validate as
+    trusted rather than merely tamper-evident. See ensure_signing_identity()
+    for the leaf certificate issued from this root.
     """
     SIGNING_ROOT.mkdir(parents=True, exist_ok=True)
-    if CERT_PATH.exists() and KEY_PATH.exists():
-        return CERT_PATH, KEY_PATH
+    if CA_CERT_PATH.exists() and CA_KEY_PATH.exists():
+        return CA_CERT_PATH, CA_KEY_PATH
 
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
@@ -45,6 +50,63 @@ def ensure_signing_identity(common_name: str = "OpenPDFForms Local Signer") -> t
         x509.CertificateBuilder()
         .subject_name(name)
         .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(days=1))
+        .not_valid_after(now + timedelta(days=3650 * 2))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=False,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=True,
+                crl_sign=True,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
+        .sign(key, hashes.SHA256())
+    )
+
+    CA_KEY_PATH.write_bytes(
+        key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+    )
+    CA_CERT_PATH.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    CA_KEY_PATH.chmod(0o600)
+    return CA_CERT_PATH, CA_KEY_PATH
+
+
+def ensure_signing_identity(common_name: str = "OpenPDFForms Local Signer") -> tuple[Path, Path]:
+    """Return (cert_path, key_path): a leaf signing cert issued by the local root CA.
+
+    Chaining to the root CA (instead of self-signing the leaf) is what lets
+    the signature validate as fully trusted once the CA's public
+    certificate is installed as a trusted root -- see ensure_root_ca().
+    """
+    SIGNING_ROOT.mkdir(parents=True, exist_ok=True)
+    if CERT_PATH.exists() and KEY_PATH.exists():
+        return CERT_PATH, KEY_PATH
+
+    ca_cert_path, ca_key_path = ensure_root_ca()
+    ca_cert = x509.load_pem_x509_certificate(ca_cert_path.read_bytes())
+    ca_key = serialization.load_pem_private_key(ca_key_path.read_bytes(), password=None)
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
+    now = datetime.now(timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(ca_cert.subject)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - timedelta(days=1))
@@ -64,7 +126,8 @@ def ensure_signing_identity(common_name: str = "OpenPDFForms Local Signer") -> t
             ),
             critical=True,
         )
-        .sign(key, hashes.SHA256())
+        .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
+        .sign(ca_key, hashes.SHA256())
     )
 
     KEY_PATH.write_bytes(
@@ -199,8 +262,14 @@ def sign_field(
     plain approval signatures layered on top via further incremental
     updates.
     """
+    ca_cert_path, _ = ensure_root_ca()
     cert_path, key_path = ensure_signing_identity()
-    signer = signers.SimpleSigner.load(key_file=str(key_path), cert_file=str(cert_path), key_passphrase=None)
+    signer = signers.SimpleSigner.load(
+        key_file=str(key_path),
+        cert_file=str(cert_path),
+        ca_chain_files=(str(ca_cert_path),),
+        key_passphrase=None,
+    )
 
     already_signed = has_existing_signature(input_pdf)
 

@@ -75,7 +75,7 @@ button, input, select, textarea {
   text-align: center;
 }
 
-button, .file-button {
+button, .file-button, #manual-link, #trust-cert-link {
   border: 1px solid var(--line);
   background: #fff;
   color: var(--text);
@@ -84,7 +84,7 @@ button, .file-button {
   cursor: pointer;
 }
 
-button:hover, .file-button:hover {
+button:hover, .file-button:hover, #manual-link:hover, #trust-cert-link:hover {
   border-color: var(--accent);
 }
 
@@ -95,6 +95,12 @@ button:disabled {
 
 .file-button input {
   display: none;
+}
+
+#manual-link, #trust-cert-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
 
 .workspace {
