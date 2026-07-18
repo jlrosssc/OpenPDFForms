@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .detector import detect_fields, render_pdf_pages
 from .exporter import export_fillable_pdf
-from .models import DocumentInfo, ExportRequest, ExportResponse, FillSignRequest, ProjectSaveRequest, ProjectSummary
+from .models import DocumentInfo, ExportRequest, ExportResponse, FillSignRequest, PreviewResponse, ProjectSaveRequest, ProjectSummary
 from .signing import CA_CERT_PATH, apply_field_values, ensure_root_ca, sign_field
 from .storage import (
     EXPORT_ROOT,
@@ -21,6 +21,7 @@ from .storage import (
     ensure_data_dirs,
     export_path,
     new_document_id,
+    preview_path,
     project_path,
     reset_render_dir,
     working_pdf_path,
@@ -88,6 +89,27 @@ def download_document(document_id: str) -> FileResponse:
     if not output_path.exists():
         raise HTTPException(status_code=404, detail="Export not found.")
     return FileResponse(output_path, media_type="application/pdf", filename=output_path.name)
+
+
+@app.post("/api/documents/{document_id}/preview", response_model=PreviewResponse)
+def preview_document(document_id: str, request: ExportRequest) -> PreviewResponse:
+    """Render the document with current field values applied, without exporting or signing.
+
+    Builds into a throwaway preview PDF/render dir (never export_path or
+    working_pdf_path) so sampling a look at the document can't clobber a
+    real export or an in-progress signed copy.
+    """
+    matches = list(UPLOAD_ROOT.glob(f"{document_id}.*"))
+    if not matches:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    preview_pdf = preview_path(document_id)
+    export_fillable_pdf(matches[0], preview_pdf, request.fields)
+    apply_field_values(preview_pdf, preview_pdf, request.fields)
+
+    render_dir = reset_render_dir(f"{document_id}-preview")
+    render_urls, _ = render_pdf_pages(preview_pdf, render_dir)
+    return PreviewResponse(render_urls=render_urls)
 
 
 @app.post("/api/documents/{document_id}/fill-and-sign", response_model=ExportResponse)

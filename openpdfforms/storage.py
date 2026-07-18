@@ -45,6 +45,10 @@ def export_path(document_id: str) -> Path:
     return EXPORT_ROOT / f"{document_id}-fillable.pdf"
 
 
+def preview_path(document_id: str) -> Path:
+    return EXPORT_ROOT / f"{document_id}-preview.pdf"
+
+
 def working_pdf_path(document_id: str) -> Path:
     return WORKING_ROOT / f"{document_id}-working.pdf"
 

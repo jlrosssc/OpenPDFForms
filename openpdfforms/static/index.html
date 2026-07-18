@@ -26,6 +26,7 @@
         <span id="zoom-level">100%</span>
         <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
       </div>
+      <button id="preview-button" type="button" disabled title="See how the document looks with current values filled in, before exporting or signing">Preview</button>
       <button id="export-button" disabled>Export Fillable PDF</button>
       <button id="fill-mode-button" type="button" disabled>Fill &amp; Sign</button>
       <a id="trust-cert-link" href="api/trust-certificate" download="openpdfforms-trust-root.pem" role="button" title="Download this server's root certificate to install as a trusted root, so E Sign signatures validate as trusted.">Trust Certificate</a>
@@ -169,6 +170,17 @@
         <button id="clear-signature" type="button">Clear</button>
         <button id="apply-signature" type="button">Sign</button>
       </footer>
+    </form>
+  </dialog>
+
+  <dialog id="preview-dialog" class="modal preview-modal">
+    <form method="dialog">
+      <header>
+        <h2>Preview</h2>
+        <button value="cancel" aria-label="Close">x</button>
+      </header>
+      <p class="hint">This shows current field values as they'll appear in the document. Signature fields still show as blank -- they're only rendered once actually signed.</p>
+      <div id="preview-pages" class="preview-pages"></div>
     </form>
   </dialog>
 

@@ -365,6 +365,27 @@ button:disabled {
   font-size: 14px;
 }
 
+.preview-modal {
+  width: min(900px, calc(100vw - 32px));
+}
+
+.preview-pages {
+  display: grid;
+  gap: 16px;
+  max-height: 75vh;
+  overflow-y: auto;
+  background: var(--bg);
+  padding: 12px;
+  border-radius: 6px;
+}
+
+.preview-pages img {
+  display: block;
+  width: 100%;
+  height: auto;
+  box-shadow: 0 2px 16px rgba(24, 32, 47, .16);
+}
+
 .project-list {
   display: grid;
   gap: 8px;

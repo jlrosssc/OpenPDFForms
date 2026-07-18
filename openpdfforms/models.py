@@ -61,6 +61,10 @@ class ExportResponse(BaseModel):
     download_url: str
 
 
+class PreviewResponse(BaseModel):
+    render_urls: list[str]
+
+
 class FillSignRequest(BaseModel):
     fields: list[FormField]
     sign_field_name: str

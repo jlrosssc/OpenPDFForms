@@ -89,6 +89,9 @@ function generateId() {
 
 const pages = document.querySelector("#pages");
 const pdfInput = document.querySelector("#pdf-input");
+const previewButton = document.querySelector("#preview-button");
+const previewDialog = document.querySelector("#preview-dialog");
+const previewPages = document.querySelector("#preview-pages");
 const exportButton = document.querySelector("#export-button");
 const saveProjectButton = document.querySelector("#save-project-button");
 const openProjectButton = document.querySelector("#open-project-button");
@@ -175,6 +178,28 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     redo();
   }
+});
+
+previewButton.addEventListener("click", async () => {
+  if (!state.documentId) return;
+  previewPages.innerHTML = "<p class=\"hint\">Rendering preview...</p>";
+  previewDialog.showModal();
+  const response = await fetch(appUrl(`api/documents/${state.documentId}/preview`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fields: state.fields }),
+  });
+  if (!response.ok) {
+    previewPages.innerHTML = `<p class="hint">Preview failed: ${await response.text()}</p>`;
+    return;
+  }
+  const payload = await response.json();
+  previewPages.innerHTML = "";
+  payload.render_urls.forEach((url) => {
+    const img = document.createElement("img");
+    img.src = `${url}?t=${Date.now()}`;
+    previewPages.appendChild(img);
+  });
 });
 
 exportButton.addEventListener("click", async () => {
@@ -423,6 +448,7 @@ function loadDocumentInfo(info) {
   state.mode = "design";
   state.pendingSignField = null;
   state.signedFields = new Set();
+  previewButton.disabled = false;
   exportButton.disabled = false;
   saveProjectButton.disabled = false;
   fillModeButton.disabled = false;
