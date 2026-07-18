@@ -49,6 +49,13 @@ Signature fields support two facsimile modes:
 
 When a signature is applied to a signature field, export embeds it as visible PDF content.
 
+## License
+
+OpenPDFForms is licensed under GPL-2.0-or-later (see `LICENSE`). The
+"or-later" grant is what makes it compatible with dependencies licensed
+under Apache-2.0 (e.g. `opencv-python-headless`, `python-multipart`),
+which GPL-2.0-only is not compatible with under the FSF's own guidance.
+
 ## Third-Party Licenses
 
 This project depends on several third-party libraries, including PyMuPDF

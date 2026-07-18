@@ -1,7 +1,7 @@
 # Third-Party Licenses
 
-OpenPDFForms is licensed under GPL-2.0-only (see `LICENSE`). It depends on
-the following third-party libraries, each under its own license:
+OpenPDFForms is licensed under GPL-2.0-or-later (see `LICENSE`). It depends
+on the following third-party libraries, each under its own license:
 
 | Library | License | Project |
 |---|---|---|
