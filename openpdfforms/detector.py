@@ -300,7 +300,8 @@ def _detect_shape_fields(page: fitz.Page, page_index: int, lines: list[dict]) ->
         elif pdf_w >= 55 and 6 <= pdf_h <= 20:
             if _looks_like_horizontal_line(contour):
                 label = _nearest_left_label(lines, pdf_x, pdf_y, pdf_h)
-                fields.append(_field(page_index, FieldType.text, pdf_x, pdf_y - 9, min(pdf_w, 320), 18, label))
+                if label and _is_likely_form_label(label):
+                    fields.append(_field(page_index, FieldType.text, pdf_x, pdf_y - 9, min(pdf_w, 320), 18, label))
     return fields
 
 
