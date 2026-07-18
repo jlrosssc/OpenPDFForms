@@ -75,7 +75,7 @@ button, input, select, textarea {
   text-align: center;
 }
 
-button, .file-button, #manual-link, #trust-cert-link {
+button, .file-button, #manual-link, #trust-cert-link, #source-link {
   border: 1px solid var(--line);
   background: #fff;
   color: var(--text);
@@ -84,7 +84,7 @@ button, .file-button, #manual-link, #trust-cert-link {
   cursor: pointer;
 }
 
-button:hover, .file-button:hover, #manual-link:hover, #trust-cert-link:hover {
+button:hover, .file-button:hover, #manual-link:hover, #trust-cert-link:hover, #source-link:hover {
   border-color: var(--accent);
 }
 
@@ -97,7 +97,7 @@ button:disabled {
   display: none;
 }
 
-#manual-link, #trust-cert-link {
+#manual-link, #trust-cert-link, #source-link {
   display: inline-flex;
   align-items: center;
   text-decoration: none;

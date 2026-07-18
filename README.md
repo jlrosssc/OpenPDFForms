@@ -48,3 +48,9 @@ Signature fields support two facsimile modes:
 - **Type** a name and render it using a cursive/script font stack.
 
 When a signature is applied to a signature field, export embeds it as visible PDF content.
+
+## Third-Party Licenses
+
+This project depends on several third-party libraries, including PyMuPDF
+under AGPL-3.0-or-later. See `THIRD_PARTY_LICENSES.md` for the full list
+and what AGPL-3.0 requires if you host a modified version of this app.
