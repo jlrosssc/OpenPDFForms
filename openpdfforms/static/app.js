@@ -7,7 +7,7 @@ const state = {
   fields: [],
   selectedIds: new Set(),
   activeId: null,
-  signatureMode: "draw",
+  signatureMode: "type",
   currentPage: 0,
   pendingType: null,
   zoom: 1,
@@ -987,6 +987,7 @@ async function openProject(documentId) {
 function openMockSignDialog(field) {
   state.pendingSignField = field.name;
   clearSignature();
+  setSignatureMode("type");
   signatureDialog.showModal();
 }
 
@@ -1031,6 +1032,10 @@ function startSignatureDraw(event) {
 function confirmMockSign() {
   const field = state.fields.find((item) => item.name === state.pendingSignField);
   if (!field) return;
+  if (state.signatureMode === "type" && !signatureText.value.trim()) {
+    alert("Type your name to sign.");
+    return;
+  }
   const dataUrl = state.signatureMode === "type" ? typedSignatureDataUrl() : signatureCanvas.toDataURL("image/png");
   const signerName = state.signatureMode === "type" ? signatureText.value : field.name;
   signatureDialog.close();

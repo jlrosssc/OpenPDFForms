@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 import json
 from datetime import datetime, timezone
 import os
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .detector import detect_fields, render_pdf_pages
@@ -44,9 +45,28 @@ app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), na
 app.mount("/renders", StaticFiles(directory=RENDER_ROOT), name="renders")
 
 
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+def _asset_version() -> str:
+    """Content hash of the static assets, so a query-string version changes
+    exactly when the files do -- forcing a fresh fetch even if a CDN in
+    front of this app (e.g. Cloudflare) overrides Cache-Control on static
+    file extensions and serves a stale copy for hours after a deploy.
+    """
+    hasher = hashlib.sha256()
+    for name in ("app.js", "styles.css"):
+        hasher.update((STATIC_DIR / name).read_bytes())
+    return hasher.hexdigest()[:10]
+
+
 @app.get("/")
-def index() -> FileResponse:
-    return FileResponse(Path(__file__).parent / "static" / "index.html")
+def index() -> HTMLResponse:
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    version = _asset_version()
+    html = html.replace('href="static/styles.css"', f'href="static/styles.css?v={version}"')
+    html = html.replace('src="static/app.js"', f'src="static/app.js?v={version}"')
+    return HTMLResponse(html)
 
 
 @app.post("/api/documents", response_model=DocumentInfo)

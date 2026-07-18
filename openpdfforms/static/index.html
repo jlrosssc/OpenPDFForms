@@ -156,15 +156,15 @@
         <button value="cancel" aria-label="Close">x</button>
       </header>
       <div class="signature-tabs">
-        <button type="button" data-signature-tab="draw" class="is-active">Draw</button>
-        <button type="button" data-signature-tab="type">Type</button>
+        <button type="button" data-signature-tab="type" class="is-active">Type</button>
+        <button type="button" data-signature-tab="draw">Draw</button>
       </div>
-      <section id="signature-draw-panel">
-        <canvas id="signature-canvas" width="720" height="220"></canvas>
-      </section>
-      <section id="signature-type-panel" hidden>
+      <section id="signature-type-panel">
         <input id="signature-text" placeholder="Type your name">
         <div id="signature-preview" class="signature-preview"></div>
+      </section>
+      <section id="signature-draw-panel" hidden>
+        <canvas id="signature-canvas" width="720" height="220"></canvas>
       </section>
       <footer>
         <button id="clear-signature" type="button">Clear</button>
