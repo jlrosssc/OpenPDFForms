@@ -589,6 +589,14 @@ textarea.fill-input {
   background: #f8fafc;
 }
 
+.label-hint {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .script-test-result {
   display: block;
   min-height: 38px;
