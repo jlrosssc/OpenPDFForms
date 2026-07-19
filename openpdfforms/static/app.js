@@ -19,6 +19,7 @@ const state = {
   signedFields: new Set(),
   suppressNextPageClick: false,
   currentUser: null,
+  previewValues: null,
 };
 
 const MAX_HISTORY = 50;
@@ -374,7 +375,6 @@ document.addEventListener("keydown", (event) => {
 
 previewButton.addEventListener("click", () => {
   if (!state.documentId) return;
-  recomputeConditions();
   previewDialog.showModal();
   renderInteractivePreview();
 });
@@ -720,10 +720,14 @@ function renderFillFields() {
     signClass: "fill-sign-box",
     radioNamePrefix: "fill-radio",
     interactiveSignatures: true,
+    valueMap: null,
+    rerender: renderFillFields,
   });
 }
 
 function renderInteractivePreview() {
+  state.previewValues = buildPreviewValues();
+  recomputeConditions(state.previewValues);
   previewPages.innerHTML = "";
   state.renderUrls.forEach((url, pageIndex) => {
     const page = document.createElement("div");
@@ -746,10 +750,36 @@ function renderPreviewControls() {
     signClass: "fill-sign-box preview-fill-sign-box",
     radioNamePrefix: "preview-radio",
     interactiveSignatures: false,
+    valueMap: state.previewValues,
+    rerender: renderPreviewControls,
   });
 }
 
-function renderFillControls({ clearSelector, pageSelector, inputClass, signClass, radioNamePrefix, interactiveSignatures }) {
+function fieldInitialPreviewValue(field) {
+  if (field.type === "checkbox" || field.type === "radio") {
+    return field.default_value === "Yes" ? "Yes" : "Off";
+  }
+  return field.default_value || "";
+}
+
+function buildPreviewValues() {
+  return new Map(state.fields.map((field) => [field.id, fieldInitialPreviewValue(field)]));
+}
+
+function fieldCurrentValue(field, valueMap) {
+  if (valueMap) return valueMap.get(field.id) ?? fieldInitialPreviewValue(field);
+  return field.value || field.default_value || "";
+}
+
+function setFieldCurrentValue(field, value, valueMap) {
+  if (valueMap) {
+    valueMap.set(field.id, value);
+  } else {
+    field.value = value;
+  }
+}
+
+function renderFillControls({ clearSelector, pageSelector, inputClass, signClass, radioNamePrefix, interactiveSignatures, valueMap, rerender }) {
   document.querySelectorAll(clearSelector).forEach((el) => el.remove());
   state.fields.forEach((field) => {
     const page = pageSelector(field);
@@ -795,24 +825,24 @@ function renderFillControls({ clearSelector, pageSelector, inputClass, signClass
     if (field.type === "checkbox") {
       input = document.createElement("input");
       input.type = "checkbox";
-      input.checked = field.value === "Yes";
+      input.checked = fieldCurrentValue(field, valueMap) === "Yes";
       input.addEventListener("change", () => {
-        field.value = input.checked ? "Yes" : "Off";
-        recomputeConditions();
+        setFieldCurrentValue(field, input.checked ? "Yes" : "Off", valueMap);
+        recomputeConditions(valueMap);
       });
     } else if (field.type === "radio") {
       input = document.createElement("input");
       input.type = "radio";
       input.name = `${radioNamePrefix}-${field.group || field.name}`;
-      input.checked = field.value === "Yes";
+      input.checked = fieldCurrentValue(field, valueMap) === "Yes";
       input.addEventListener("change", () => {
         state.fields
           .filter((item) => item.type === "radio" && (item.group || item.name) === (field.group || field.name))
           .forEach((item) => {
-            item.value = item.id === field.id ? "Yes" : "Off";
+            setFieldCurrentValue(item, item.id === field.id ? "Yes" : "Off", valueMap);
           });
-        renderPreviewControls();
-        recomputeConditions();
+        recomputeConditions(valueMap);
+        rerender();
       });
     } else if (field.type === "dropdown" || field.type === "listbox") {
       input = document.createElement("select");
@@ -826,25 +856,25 @@ function renderFillControls({ clearSelector, pageSelector, inputClass, signClass
         opt.textContent = option;
         input.appendChild(opt);
       });
-      input.value = field.value || field.default_value || "";
+      input.value = fieldCurrentValue(field, valueMap);
       input.addEventListener("change", () => {
-        field.value = input.multiple ? [...input.selectedOptions].map((option) => option.value).join(", ") : input.value;
-        recomputeConditions();
+        setFieldCurrentValue(field, input.multiple ? [...input.selectedOptions].map((option) => option.value).join(", ") : input.value, valueMap);
+        recomputeConditions(valueMap);
       });
     } else if (field.multiline) {
       input = document.createElement("textarea");
-      input.value = field.value || field.default_value || "";
+      input.value = fieldCurrentValue(field, valueMap);
       input.addEventListener("input", () => {
-        field.value = input.value;
-        recomputeConditions();
+        setFieldCurrentValue(field, input.value, valueMap);
+        recomputeConditions(valueMap);
       });
     } else {
       input = document.createElement("input");
       input.type = "text";
-      input.value = field.value || field.default_value || "";
+      input.value = fieldCurrentValue(field, valueMap);
       input.addEventListener("input", () => {
-        field.value = input.value;
-        recomputeConditions();
+        setFieldCurrentValue(field, input.value, valueMap);
+        recomputeConditions(valueMap);
       });
     }
     input.className = inputClass;
@@ -867,11 +897,11 @@ function renderFillControls({ clearSelector, pageSelector, inputClass, signClass
     style(input);
     page.appendChild(input);
   });
-  recomputeConditions();
+  recomputeConditions(valueMap);
 }
 
-function fieldMatchesCondition(sourceField, rule) {
-  const value = sourceField ? sourceField.value || sourceField.default_value || "" : "";
+function fieldMatchesCondition(sourceField, rule, valueMap) {
+  const value = sourceField ? fieldCurrentValue(sourceField, valueMap) : "";
   switch (rule.operator) {
     case "checked":
       return value === "Yes";
@@ -890,17 +920,17 @@ function fieldMatchesCondition(sourceField, rule) {
   }
 }
 
-function recomputeConditions() {
+function recomputeConditions(valueMap = null) {
   const computedFields = state.fields.filter((field) => field.conditions && field.conditions.length);
   if (!computedFields.length) return;
   for (let pass = 0; pass < 5; pass += 1) {
     const byName = new Map(state.fields.map((field) => [field.name, field]));
     let changed = false;
     computedFields.forEach((field) => {
-      const match = field.conditions.find((rule) => fieldMatchesCondition(byName.get(rule.source_field), rule));
+      const match = field.conditions.find((rule) => fieldMatchesCondition(byName.get(rule.source_field), rule, valueMap));
       const next = match ? match.output : field.condition_default || "";
-      if (field.value !== next) {
-        field.value = next;
+      if (fieldCurrentValue(field, valueMap) !== next) {
+        setFieldCurrentValue(field, next, valueMap);
         changed = true;
       }
     });
@@ -908,7 +938,12 @@ function recomputeConditions() {
   }
   computedFields.forEach((field) => {
     document.querySelectorAll(`.fill-input[data-field-id="${field.id}"]`).forEach((input) => {
-      if (input.value !== field.value) input.value = field.value;
+      const value = fieldCurrentValue(field, valueMap);
+      if (field.type === "checkbox" || field.type === "radio") {
+        input.checked = value === "Yes";
+      } else if (input.value !== value) {
+        input.value = value;
+      }
     });
   });
 }
