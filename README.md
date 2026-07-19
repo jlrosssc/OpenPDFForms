@@ -86,6 +86,12 @@ The Custom Script section accepts Acrobat JavaScript snippets for format, valida
 
 Copy `hooks.example.py` to `hooks.py` and edit `process_fields()` to rename, filter, or adjust detected fields before they appear in the editor.
 
+## Built-in Access Control
+
+OpenPDFForms includes app-level login and admin user management. On a new install, visit the app and create the first administrator account on the setup page. After signing in, admins can open **Users** from the top toolbar to add users, disable users, reset passwords, and grant or remove admin access.
+
+If OpenPDFForms is deployed behind Apache, nginx, or `.htaccess` basic authentication, keep the external protection in place until the first app admin account has been created and verified. After that, the proxy-level password can be removed if you want access controlled by OpenPDFForms itself.
+
 ## Stirling PDF Integration
 
 The deployment files can run OpenPDFForms beside Stirling PDF behind a reverse proxy. The intended workflow is:

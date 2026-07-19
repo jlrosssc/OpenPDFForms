@@ -5,11 +5,26 @@ import hashlib
 import json
 from datetime import datetime, timezone
 import os
+from typing import Annotated
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from .auth import (
+    SESSION_COOKIE,
+    User,
+    authenticate,
+    create_session,
+    create_user,
+    delete_session,
+    delete_user,
+    init_auth_db,
+    list_users,
+    update_user,
+    user_from_session,
+    users_exist,
+)
 from .detector import detect_fields, import_existing_fields, render_pdf_pages
 from .exporter import export_fillable_pdf
 from .models import DocumentInfo, ExportRequest, ExportResponse, FillSignRequest, PreviewResponse, ProjectSaveRequest, ProjectSummary
@@ -31,12 +46,47 @@ from .storage import (
 
 app = FastAPI(title="OpenPDFForms", root_path=os.environ.get("OPENPDFFORMS_ROOT_PATH", ""))
 ensure_data_dirs()
+init_auth_db()
+
+
+LOGIN_HTML = """<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>OpenPDFForms Login</title><link rel="stylesheet" href="static/styles.css"></head>
+<body class="auth-page"><main class="auth-card"><h1>OpenPDFForms</h1><p>{message}</p><form method="post" action="{action}"><label>Username<input name="username" autocomplete="username" required autofocus></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button type="submit">{button}</button></form></main></body>
+</html>"""
+
+
+def _wants_html(request: Request) -> bool:
+    return "text/html" in request.headers.get("accept", "")
+
+
+async def current_user(request: Request) -> User:
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="Login required.")
+    return user
+
+
+async def current_admin(user: Annotated[User, Depends(current_user)]) -> User:
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return user
 
 
 @app.middleware("http")
-async def no_cache_for_app_shell(request, call_next):
+async def auth_and_no_cache(request: Request, call_next):
+    path = request.url.path
+    public = path.startswith("/static/") or path in {"/login", "/api/login", "/logout"}
+    setup_allowed = not users_exist() and path in {"/setup", "/api/setup"}
+    if not public and not setup_allowed:
+        user = user_from_session(request.cookies.get(SESSION_COOKIE))
+        if not user:
+            if _wants_html(request):
+                return RedirectResponse("setup" if not users_exist() else "login", status_code=303)
+            return JSONResponse({"detail": "Login required."}, status_code=401)
+        request.state.user = user
     response = await call_next(request)
-    if request.url.path == "/" or request.url.path.startswith("/static/"):
+    if path == "/" or path in {"/login", "/setup"} or path.startswith("/static/"):
         response.headers["Cache-Control"] = "no-cache"
     return response
 
@@ -46,6 +96,94 @@ app.mount("/renders", StaticFiles(directory=RENDER_ROOT), name="renders")
 
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+
+@app.get("/login")
+def login_page() -> HTMLResponse:
+    return HTMLResponse(LOGIN_HTML.format(message="Sign in to continue.", action="api/login", button="Sign In"))
+
+
+@app.post("/api/login")
+def login(username: Annotated[str, Form()], password: Annotated[str, Form()]) -> RedirectResponse:
+    user = authenticate(username, password)
+    if not user:
+        return RedirectResponse("../login", status_code=303)
+    response = RedirectResponse("../", status_code=303)
+    response.set_cookie(SESSION_COOKIE, create_session(user.id), httponly=True, secure=False, samesite="lax", max_age=30 * 24 * 60 * 60)
+    return response
+
+
+@app.get("/setup")
+def setup_page() -> HTMLResponse:
+    if users_exist():
+        return RedirectResponse("login", status_code=303)
+    return HTMLResponse(LOGIN_HTML.format(message="Create the first administrator account.", action="api/setup", button="Create Admin"))
+
+
+@app.post("/api/setup")
+def setup_admin(username: Annotated[str, Form()], password: Annotated[str, Form()]) -> RedirectResponse:
+    if users_exist():
+        return RedirectResponse("../login", status_code=303)
+    user = create_user(username, password, is_admin=True, active=True)
+    response = RedirectResponse("../", status_code=303)
+    response.set_cookie(SESSION_COOKIE, create_session(user.id), httponly=True, secure=False, samesite="lax", max_age=30 * 24 * 60 * 60)
+    return response
+
+
+@app.get("/logout")
+def logout(request: Request) -> RedirectResponse:
+    delete_session(request.cookies.get(SESSION_COOKIE, ""))
+    response = RedirectResponse("login", status_code=303)
+    response.delete_cookie(SESSION_COOKIE)
+    return response
+
+
+@app.get("/api/me")
+def me(user: Annotated[User, Depends(current_user)]) -> dict:
+    return {"id": user.id, "username": user.username, "is_admin": user.is_admin}
+
+
+@app.get("/api/users")
+def users(_: Annotated[User, Depends(current_admin)]) -> list[dict]:
+    return list_users()
+
+
+@app.post("/api/users")
+def add_user(payload: Annotated[dict, Body()], _: Annotated[User, Depends(current_admin)]) -> dict:
+    try:
+        user = create_user(
+            str(payload.get("username", "")),
+            str(payload.get("password", "")),
+            is_admin=bool(payload.get("is_admin", False)),
+            active=bool(payload.get("active", True)),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"id": user.id, "username": user.username, "is_admin": user.is_admin, "active": user.active}
+
+
+@app.patch("/api/users/{user_id}")
+def edit_user(user_id: int, payload: Annotated[dict, Body()], admin: Annotated[User, Depends(current_admin)]) -> dict:
+    if user_id == admin.id and payload.get("active") is False:
+        raise HTTPException(status_code=400, detail="You cannot disable your own account.")
+    try:
+        user = update_user(
+            user_id,
+            password=str(payload["password"]) if payload.get("password") else None,
+            is_admin=bool(payload["is_admin"]) if "is_admin" in payload else None,
+            active=bool(payload["active"]) if "active" in payload else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"id": user.id, "username": user.username, "is_admin": user.is_admin, "active": user.active}
+
+
+@app.delete("/api/users/{user_id}")
+def remove_user(user_id: int, admin: Annotated[User, Depends(current_admin)]) -> dict:
+    if user_id == admin.id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account.")
+    delete_user(user_id)
+    return {"ok": True}
 
 
 def _asset_version() -> str:

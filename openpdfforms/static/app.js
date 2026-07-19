@@ -18,6 +18,7 @@ const state = {
   pendingSignField: null,
   signedFields: new Set(),
   suppressNextPageClick: false,
+  currentUser: null,
 };
 
 const MAX_HISTORY = 50;
@@ -184,10 +185,108 @@ const esignNameInput = document.querySelector("#esign-name");
 const esignReasonInput = document.querySelector("#esign-reason");
 const esignLocationInput = document.querySelector("#esign-location");
 const confirmEsignButton = document.querySelector("#confirm-esign");
+const userAdminButton = document.querySelector("#user-admin-button");
+const userDialog = document.querySelector("#user-dialog");
+const userList = document.querySelector("#user-list");
+const newUsername = document.querySelector("#new-username");
+const newPassword = document.querySelector("#new-password");
+const newIsAdmin = document.querySelector("#new-is-admin");
+const createUserButton = document.querySelector("#create-user-button");
 
 function appUrl(path) {
   return new URL(path, window.location.href).toString();
 }
+
+async function loadCurrentUser() {
+  const response = await fetch(appUrl("api/me"));
+  if (!response.ok) return;
+  state.currentUser = await response.json();
+  userAdminButton.hidden = !state.currentUser.is_admin;
+}
+
+async function openUserAdmin() {
+  if (!state.currentUser?.is_admin) return;
+  await refreshUsers();
+  userDialog.showModal();
+}
+
+async function refreshUsers() {
+  const response = await fetch(appUrl("api/users"));
+  if (!response.ok) {
+    alert(await response.text());
+    return;
+  }
+  const users = await response.json();
+  userList.innerHTML = users
+    .map(
+      (user) => `
+      <article class="user-row" data-user-id="${user.id}">
+        <div><strong>${escapeHtml(user.username)}</strong><span>${user.is_admin ? "Admin" : "User"} · ${user.active ? "Active" : "Disabled"}</span></div>
+        <button type="button" data-user-action="toggle-admin">${user.is_admin ? "Remove Admin" : "Make Admin"}</button>
+        <button type="button" data-user-action="toggle-active">${user.active ? "Disable" : "Enable"}</button>
+        <button type="button" data-user-action="reset-password">Reset Password</button>
+        <button type="button" data-user-action="delete">Delete</button>
+      </article>`
+    )
+    .join("");
+}
+
+async function createUserFromDialog() {
+  const payload = {
+    username: newUsername.value.trim(),
+    password: newPassword.value,
+    is_admin: newIsAdmin.checked,
+    active: true,
+  };
+  const response = await fetch(appUrl("api/users"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    alert(await response.text());
+    return;
+  }
+  newUsername.value = "";
+  newPassword.value = "";
+  newIsAdmin.checked = false;
+  await refreshUsers();
+}
+
+userList.addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-user-action]");
+  if (!button) return;
+  const row = button.closest(".user-row");
+  const userId = row.dataset.userId;
+  const action = button.dataset.userAction;
+  const username = row.querySelector("strong").textContent;
+  let method = "PATCH";
+  let payload = {};
+  if (action === "toggle-admin") {
+    payload.is_admin = button.textContent === "Make Admin";
+  } else if (action === "toggle-active") {
+    payload.active = button.textContent === "Enable";
+  } else if (action === "reset-password") {
+    const password = prompt(`New password for ${username}`);
+    if (!password) return;
+    payload.password = password;
+  } else if (action === "delete") {
+    if (!confirm(`Delete ${username}?`)) return;
+    method = "DELETE";
+  }
+  const response = await fetch(appUrl(`api/users/${userId}`), {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: method === "DELETE" ? undefined : JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    alert(await response.text());
+    return;
+  }
+  await refreshUsers();
+});
+
+loadCurrentUser();
 
 pdfInput.addEventListener("change", async () => {
   const file = pdfInput.files[0];
@@ -300,6 +399,8 @@ openProjectButton.addEventListener("click", openProjectChooser);
 clearSignatureButton.addEventListener("click", clearSignature);
 applySignatureButton.addEventListener("click", confirmMockSign);
 confirmEsignButton.addEventListener("click", confirmEsign);
+userAdminButton.addEventListener("click", openUserAdmin);
+createUserButton.addEventListener("click", createUserFromDialog);
 fillModeButton.addEventListener("click", enterFillMode);
 backToDesignButton.addEventListener("click", exitFillMode);
 downloadWorkingButton.addEventListener("click", () => {

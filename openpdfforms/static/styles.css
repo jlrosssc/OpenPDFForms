@@ -84,7 +84,7 @@ button, input, select, textarea {
   text-align: center;
 }
 
-button, .file-button, #manual-link, #trust-cert-link, #source-link {
+button, .file-button, #manual-link, #trust-cert-link, #logout-link, #source-link {
   border: 1px solid var(--line);
   background: #fff;
   color: var(--text);
@@ -93,7 +93,7 @@ button, .file-button, #manual-link, #trust-cert-link, #source-link {
   cursor: pointer;
 }
 
-button:hover, .file-button:hover, #manual-link:hover, #trust-cert-link:hover, #source-link:hover {
+button:hover, .file-button:hover, #manual-link:hover, #trust-cert-link:hover, #logout-link:hover, #source-link:hover {
   border-color: var(--accent);
 }
 
@@ -106,7 +106,7 @@ button:disabled {
   display: none;
 }
 
-#manual-link, #trust-cert-link, #source-link {
+#manual-link, #trust-cert-link, #logout-link, #source-link {
   display: inline-flex;
   align-items: center;
   text-decoration: none;
@@ -605,4 +605,85 @@ textarea.fill-input {
   border-color: #2f7d54;
   background: rgba(61, 132, 92, .18);
   color: #1f5c39;
+}
+
+
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 22px;
+}
+
+.auth-card h1, .auth-card p {
+  margin: 0;
+}
+
+.auth-card p {
+  color: var(--muted);
+}
+
+.auth-card form, .user-create {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-card label, .user-create label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.auth-card input, .user-create input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 8px;
+  color: var(--text);
+}
+
+.user-modal form {
+  min-width: min(760px, 92vw);
+}
+
+.user-create {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  align-items: end;
+  margin-bottom: 14px;
+}
+
+.user-list {
+  display: grid;
+  gap: 8px;
+}
+
+.user-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) repeat(4, auto);
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.user-row div {
+  display: grid;
+  gap: 2px;
+}
+
+.user-row span {
+  color: var(--muted);
+  font-size: 12px;
 }
