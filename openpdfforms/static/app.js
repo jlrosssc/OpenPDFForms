@@ -129,6 +129,7 @@ const backToDesignButton = document.querySelector("#back-to-design-button");
 const downloadWorkingButton = document.querySelector("#download-working-button");
 const addFieldPanel = document.querySelector("#add-field-panel");
 const arrangeGroupPanel = document.querySelector("#arrange-group");
+const fieldContextMenu = document.querySelector("#field-context-menu");
 const conditionRows = document.querySelector("#condition-rows");
 const addConditionButton = document.querySelector("#add-condition");
 const esignDialog = document.querySelector("#esign-dialog");
@@ -733,6 +734,12 @@ function renderFields() {
         selectOnly(field.id);
       }
     });
+    element.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      selectOnly(field.id);
+      openFieldContextMenu(event, field);
+    });
     if (field.type === "signature" && field.signature_data_url) {
       const image = document.createElement("img");
       image.className = "signature-image";
@@ -750,6 +757,53 @@ function renderFields() {
     page.appendChild(element);
   });
 }
+
+function openFieldContextMenu(event, field) {
+  fieldContextMenu.hidden = false;
+  fieldContextMenu.style.left = `${event.clientX}px`;
+  fieldContextMenu.style.top = `${event.clientY}px`;
+  fieldContextMenu.dataset.fieldId = field.id;
+}
+
+function closeFieldContextMenu() {
+  fieldContextMenu.hidden = true;
+  delete fieldContextMenu.dataset.fieldId;
+}
+
+document.addEventListener("pointerdown", (event) => {
+  if (!fieldContextMenu.hidden && !fieldContextMenu.contains(event.target)) closeFieldContextMenu();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !fieldContextMenu.hidden) closeFieldContextMenu();
+});
+
+fieldContextMenu.addEventListener("click", (event) => {
+  const action = event.target.dataset.action;
+  if (!action) return;
+  const field = state.fields.find((item) => item.id === fieldContextMenu.dataset.fieldId);
+  closeFieldContextMenu();
+  if (!field) return;
+
+  if (action === "delete") {
+    deleteButton.click();
+    return;
+  }
+
+  pushHistory();
+  if (action === "toggle-required") {
+    field.required = !field.required;
+  } else if (action === "set-group") {
+    const value = prompt("Group name (radio buttons sharing this name act as one choice):", field.group || "");
+    if (value === null) return;
+    field.group = value.trim();
+  } else if (action === "add-condition") {
+    field.conditions = field.conditions || [];
+    field.conditions.push({ source_field: "", operator: "equals", value: "", output: "" });
+  }
+  syncInspector();
+  renderFields();
+});
 
 function startResize(event, field, corner) {
   event.stopPropagation();

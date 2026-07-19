@@ -234,6 +234,30 @@ button:disabled {
   padding: 6px 8px;
 }
 
+.context-menu {
+  position: fixed;
+  z-index: 50;
+  display: grid;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 4px 20px rgba(24, 32, 47, .2);
+  padding: 4px;
+  min-width: 160px;
+}
+
+.context-menu button {
+  border: none;
+  border-radius: 4px;
+  text-align: left;
+  padding: 8px 10px;
+  background: transparent;
+}
+
+.context-menu button:hover {
+  background: var(--field);
+}
+
 .fill-input.is-computed {
   background: rgba(24, 32, 47, .06);
   color: var(--muted);
