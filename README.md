@@ -4,7 +4,7 @@ OpenPDFForms is a local web app for turning flat, scanned, or existing AcroForm 
 
 ## Current Capabilities
 
-- Upload a PDF and render each page in the browser.
+- Upload a PDF, image, or common office document; non-PDF uploads are converted to PDF before rendering and field detection.
 - Auto-detect likely text fields, checkboxes, and radio buttons. Detected and imported fields use short type-based names such as `text_1`, `checkbox_1`, or `radio_1`, while nearby or imported descriptive text is kept as the field label and tooltip.
 - Import existing AcroForm fields from PDFs created in tools such as Adobe Acrobat.
 - Add, move, resize, duplicate, align, distribute, or delete fields.
@@ -55,7 +55,7 @@ The Inspector supports common Acrobat-style field properties:
 
 ### Create a Fillable Form
 
-1. Open OpenPDFForms and upload a PDF.
+1. Open OpenPDFForms and upload a PDF, image, Word/LibreOffice document, spreadsheet, presentation, text file, or CSV.
 2. Review the detected fields. Move, resize, rename, or delete anything that was detected incorrectly.
 3. Add missing fields from the Add Field panel.
 4. Select each field and use the Inspector to set its name, label, tooltip, required status, formatting, calculations, conditional logic, and visual style.
@@ -150,7 +150,7 @@ OpenPDFForms separates the editable project from the distributable PDF:
 
 OpenPDFForms is licensed under AGPL-3.0-or-later (see `LICENSE`).
 
-This project uses PyMuPDF under its free AGPL-3.0-or-later license. If you make OpenPDFForms or a modified version available to other users over a network, AGPL-3.0 requires that those users can access the corresponding source code for the version they are using. The bundled web interface includes a **Source** link for this purpose.
+This project uses PyMuPDF under its free AGPL-3.0-or-later license. If you make OpenPDFForms or a modified version available to other users over a network, AGPL-3.0 requires that those users can access the corresponding source code for the version they are using.
 
 If you cannot satisfy AGPL-3.0 obligations for your use case, obtain a commercial PyMuPDF license from Artifex before deploying the app.
 

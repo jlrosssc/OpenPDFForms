@@ -25,6 +25,7 @@ from .auth import (
     user_from_session,
     users_exist,
 )
+from .converter import ConversionError, convert_upload_to_pdf
 from .detector import detect_fields, import_existing_fields, render_pdf_pages
 from .exporter import export_fillable_pdf
 from .models import DocumentInfo, ExportRequest, ExportResponse, FillSignRequest, PreviewResponse, ProjectSaveRequest, ProjectSummary
@@ -33,7 +34,6 @@ from .storage import (
     EXPORT_ROOT,
     RENDER_ROOT,
     UPLOAD_ROOT,
-    document_upload_path,
     ensure_data_dirs,
     export_path,
     new_document_id,
@@ -209,14 +209,23 @@ def index() -> HTMLResponse:
 
 @app.post("/api/documents", response_model=DocumentInfo)
 async def upload_document(file: UploadFile = File(...)) -> DocumentInfo:
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Upload a PDF file.")
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Upload a PDF or convertible document file.")
 
     document_id = new_document_id()
-    source_path = document_upload_path(document_id, file.filename)
-    with source_path.open("wb") as out:
+    original_suffix = Path(file.filename).suffix.lower() or ".bin"
+    original_path = UPLOAD_ROOT / f"{document_id}-source{original_suffix}"
+    source_path = UPLOAD_ROOT / f"{document_id}.pdf"
+    with original_path.open("wb") as out:
         while chunk := await file.read(1024 * 1024):
             out.write(chunk)
+    try:
+        convert_upload_to_pdf(original_path, source_path)
+    except ConversionError as exc:
+        original_path.unlink(missing_ok=True)
+        source_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    original_path.unlink(missing_ok=True)
 
     render_dir = reset_render_dir(document_id)
     render_urls, page_sizes = render_pdf_pages(source_path, render_dir)
