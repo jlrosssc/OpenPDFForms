@@ -89,7 +89,15 @@ def _hex_to_rgb(hex_color: str) -> tuple[float, float, float] | None:
         return None
 
 
+def _escape_pdf_string(value: str) -> str:
+    return value.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
+
+
 def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormField]) -> None:
+    signature_field_names = [
+        field.name for field in fields if field.type in (FieldType.signature, FieldType.digital_signature)
+    ]
+
     with fitz.open(source_pdf) as doc:
         for field in fields:
             page = doc[field.page]
@@ -148,6 +156,18 @@ def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormFie
                         f'AFSimple_Calculate("{CALC_OPERATIONS[field.calc_operation]}", new Array({names}));'
                     )
 
-            page.add_widget(widget)
+            annot = page.add_widget(widget)
+
+            if field.type in (FieldType.signature, FieldType.digital_signature):
+                # SigFieldLock: tells any spec-compliant viewer (Acrobat, Reader, etc.)
+                # to lock other fields the moment *this* field is actually signed with a
+                # real digital ID -- entirely client-side, no dependency on this app's
+                # own server-side signing. Excludes other signature fields (rather than
+                # locking everything) so a form with multiple signature lines can still
+                # be signed by different people at different times.
+                other_names = [name for name in signature_field_names if name != field.name]
+                names_pdf = " ".join(f"({_escape_pdf_string(name)})" for name in other_names)
+                doc.xref_set_key(annot.xref, "Lock", f"<< /Type /SigFieldLock /Action /Exclude /Fields [{names_pdf}] >>")
+
         output_pdf.parent.mkdir(parents=True, exist_ok=True)
         doc.save(output_pdf, deflate=True, garbage=4)
