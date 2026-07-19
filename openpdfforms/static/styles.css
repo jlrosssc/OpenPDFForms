@@ -476,11 +476,19 @@ button:disabled {
   border-radius: 6px;
 }
 
+.preview-page {
+  position: relative;
+}
+
 .preview-pages img {
   display: block;
   width: 100%;
   height: auto;
   box-shadow: 0 2px 16px rgba(24, 32, 47, .16);
+}
+
+.preview-fill-input, .preview-fill-sign-box {
+  z-index: 2;
 }
 
 .project-list {

@@ -577,11 +577,49 @@ function exitFillMode() {
 }
 
 function renderFillFields() {
-  document.querySelectorAll(".field, .fill-input, .fill-sign-box").forEach((el) => el.remove());
+  renderFillControls({
+    clearSelector: ".field, .fill-input, .fill-sign-box",
+    pageSelector: (field) => document.querySelector(`.page[data-page="${field.page}"]`),
+    inputClass: "fill-input",
+    signClass: "fill-sign-box",
+    radioNamePrefix: "fill-radio",
+    interactiveSignatures: true,
+  });
+}
+
+function renderInteractivePreview() {
+  previewPages.innerHTML = "";
+  state.renderUrls.forEach((url, pageIndex) => {
+    const page = document.createElement("div");
+    page.className = "preview-page";
+    page.dataset.page = pageIndex;
+    const img = document.createElement("img");
+    img.src = `${url}?t=${Date.now()}`;
+    img.onload = renderPreviewControls;
+    page.appendChild(img);
+    previewPages.appendChild(page);
+  });
+  renderPreviewControls();
+}
+
+function renderPreviewControls() {
+  renderFillControls({
+    clearSelector: ".preview-fill-input, .preview-fill-sign-box",
+    pageSelector: (field) => previewPages.querySelector(`.preview-page[data-page="${field.page}"]`),
+    inputClass: "fill-input preview-fill-input",
+    signClass: "fill-sign-box preview-fill-sign-box",
+    radioNamePrefix: "preview-radio",
+    interactiveSignatures: false,
+  });
+}
+
+function renderFillControls({ clearSelector, pageSelector, inputClass, signClass, radioNamePrefix, interactiveSignatures }) {
+  document.querySelectorAll(clearSelector).forEach((el) => el.remove());
   state.fields.forEach((field) => {
-    const page = document.querySelector(`.page[data-page="${field.page}"]`);
+    const page = pageSelector(field);
     if (!page) return;
     const img = page.querySelector("img");
+    if (!img || !img.clientWidth || !img.clientHeight) return;
     const [pdfWidth, pdfHeight] = state.pageSizes[field.page];
     const scaleX = img.clientWidth / pdfWidth;
     const scaleY = img.clientHeight / pdfHeight;
@@ -596,13 +634,14 @@ function renderFillFields() {
 
     if (field.type === "signature" || field.type === "initials" || field.type === "digital_signature") {
       const box = document.createElement("div");
-      box.className = `fill-sign-box fill-sign-box-${field.type}`;
+      box.className = `${signClass} fill-sign-box-${field.type}`;
       style(box);
       const signed = state.signedFields.has(field.name);
-      box.textContent = signed ? "Signed" : field.type === "digital_signature" ? "Click to E Sign" : field.type === "initials" ? "Click to Initial" : "Click to Mock Sign";
+      box.textContent = signed ? "Signed" : field.type === "digital_signature" ? "E Sign" : field.type === "initials" ? "Initials" : "Mock Sign";
       if (signed) {
         box.classList.add("is-signed");
-      } else {
+      } else if (interactiveSignatures) {
+        box.textContent = field.type === "digital_signature" ? "Click to E Sign" : field.type === "initials" ? "Click to Initial" : "Click to Mock Sign";
         box.addEventListener("click", (event) => {
           event.stopPropagation();
           if (field.type === "signature" || field.type === "initials") {
@@ -628,14 +667,15 @@ function renderFillFields() {
     } else if (field.type === "radio") {
       input = document.createElement("input");
       input.type = "radio";
-      input.name = `fill-radio-${field.group || field.name}`;
+      input.name = `${radioNamePrefix}-${field.group || field.name}`;
       input.checked = field.value === "Yes";
       input.addEventListener("change", () => {
         state.fields
-          .filter((item) => item.type === "radio" && item.group === field.group)
+          .filter((item) => item.type === "radio" && (item.group || item.name) === (field.group || field.name))
           .forEach((item) => {
             item.value = item.id === field.id ? "Yes" : "Off";
           });
+        renderPreviewControls();
         recomputeConditions();
       });
     } else if (field.type === "dropdown" || field.type === "listbox") {
@@ -671,7 +711,7 @@ function renderFillFields() {
         recomputeConditions();
       });
     }
-    input.className = "fill-input";
+    input.className = inputClass;
     input.dataset.fieldId = field.id;
     if (field.read_only) {
       if (input.tagName === "SELECT" || field.type === "checkbox" || field.type === "radio") {
@@ -731,8 +771,9 @@ function recomputeConditions() {
     if (!changed) break;
   }
   computedFields.forEach((field) => {
-    const input = document.querySelector(`.fill-input[data-field-id="${field.id}"]`);
-    if (input && input.value !== field.value) input.value = field.value;
+    document.querySelectorAll(`.fill-input[data-field-id="${field.id}"]`).forEach((input) => {
+      if (input.value !== field.value) input.value = field.value;
+    });
   });
 }
 
