@@ -227,26 +227,10 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-previewButton.addEventListener("click", async () => {
+previewButton.addEventListener("click", () => {
   if (!state.documentId) return;
-  previewPages.innerHTML = "<p class=\"hint\">Rendering preview...</p>";
   previewDialog.showModal();
-  const response = await fetch(appUrl(`api/documents/${state.documentId}/preview`), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fields: state.fields }),
-  });
-  if (!response.ok) {
-    previewPages.innerHTML = `<p class="hint">Preview failed: ${await response.text()}</p>`;
-    return;
-  }
-  const payload = await response.json();
-  previewPages.innerHTML = "";
-  payload.render_urls.forEach((url) => {
-    const img = document.createElement("img");
-    img.src = `${url}?t=${Date.now()}`;
-    previewPages.appendChild(img);
-  });
+  renderInteractivePreview();
 });
 
 exportButton.addEventListener("click", async () => {
