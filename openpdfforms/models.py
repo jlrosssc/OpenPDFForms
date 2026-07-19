@@ -17,6 +17,13 @@ class FieldType(str, Enum):
     date = "date"
 
 
+class ConditionRule(BaseModel):
+    source_field: str = ""
+    operator: str = "equals"
+    value: str = ""
+    output: str = ""
+
+
 class FormField(BaseModel):
     id: str
     page: int = Field(ge=0)
@@ -42,6 +49,8 @@ class FormField(BaseModel):
     format: str = ""
     calc_operation: str = ""
     calc_fields: list[str] = Field(default_factory=list)
+    conditions: list[ConditionRule] = Field(default_factory=list)
+    condition_default: str = ""
 
 
 class DocumentInfo(BaseModel):

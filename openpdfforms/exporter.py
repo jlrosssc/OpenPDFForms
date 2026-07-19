@@ -4,7 +4,7 @@ from pathlib import Path
 
 import fitz
 
-from .models import FieldType, FormField
+from .models import ConditionRule, FieldType, FormField
 
 FORMAT_SCRIPTS = {
     "number": 'AFNumber_Format(2, 0, 0, 0, "", false);',
@@ -23,6 +23,56 @@ CALC_OPERATIONS = {
     "min": "MIN",
     "max": "MAX",
 }
+
+
+def _escape_js_string(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
+def _condition_js_test(rule: ConditionRule) -> str:
+    """Build a null-safe Acrobat JS boolean test for one if/then rule.
+
+    Guards every comparison with a "field exists" check: a rule can
+    reference a field that was later renamed or removed, and
+    this.getField(...) returning null would otherwise throw inside the
+    viewer's JS engine rather than just not matching.
+    """
+    source = _escape_js_string(rule.source_field)
+    value = _escape_js_string(rule.value)
+    get = f'this.getField("{source}")'
+    if rule.operator == "checked":
+        comparison = f'{get}.value == "Yes"'
+    elif rule.operator == "not_checked":
+        comparison = f'{get}.value != "Yes"'
+    elif rule.operator == "empty":
+        comparison = f'{get}.value == ""'
+    elif rule.operator == "not_empty":
+        comparison = f'{get}.value != ""'
+    elif rule.operator == "not_equals":
+        comparison = f'{get}.value != "{value}"'
+    elif rule.operator == "contains":
+        comparison = f'{get}.value.indexOf("{value}") !== -1'
+    else:
+        comparison = f'{get}.value == "{value}"'
+    return f'({get} != null && {comparison})'
+
+
+def _build_condition_script(field: FormField) -> str:
+    """Compile a field's if/then rules into an Acrobat-compatible Calculate script.
+
+    Runs only in PDF viewers with a JS engine (Adobe Acrobat/Reader);
+    other viewers simply won't execute it, leaving the field as a normal
+    editable text field -- see the field_flags note in export_fillable_pdf
+    for why it's deliberately left editable rather than read-only.
+    """
+    lines = []
+    for index, rule in enumerate(field.conditions):
+        keyword = "if" if index == 0 else "else if"
+        output = _escape_js_string(rule.output)
+        lines.append(f'{keyword} {_condition_js_test(rule)} {{ event.value = "{output}"; }}')
+    default_output = _escape_js_string(field.condition_default)
+    lines.append(f'else {{ event.value = "{default_output}"; }}')
+    return "\n".join(lines)
 
 
 def _hex_to_rgb(hex_color: str) -> tuple[float, float, float] | None:
@@ -88,7 +138,11 @@ def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormFie
                     widget.text_maxlen = field.max_length
                 if field.format in FORMAT_SCRIPTS:
                     widget.script_format = FORMAT_SCRIPTS[field.format]
-                if field.calc_operation in CALC_OPERATIONS and field.calc_fields:
+                if field.conditions:
+                    # Left editable (no read-only flag) so the field still works as a
+                    # plain text field in viewers that don't run PDF JavaScript.
+                    widget.script_calc = _build_condition_script(field)
+                elif field.calc_operation in CALC_OPERATIONS and field.calc_fields:
                     names = ", ".join(f'"{name}"' for name in field.calc_fields)
                     widget.script_calc = (
                         f'AFSimple_Calculate("{CALC_OPERATIONS[field.calc_operation]}", new Array({names}));'

@@ -129,6 +129,8 @@ const backToDesignButton = document.querySelector("#back-to-design-button");
 const downloadWorkingButton = document.querySelector("#download-working-button");
 const addFieldPanel = document.querySelector("#add-field-panel");
 const arrangeGroupPanel = document.querySelector("#arrange-group");
+const conditionRows = document.querySelector("#condition-rows");
+const addConditionButton = document.querySelector("#add-condition");
 const esignDialog = document.querySelector("#esign-dialog");
 const esignNameInput = document.querySelector("#esign-name");
 const esignReasonInput = document.querySelector("#esign-reason");
@@ -310,6 +312,17 @@ inspector.addEventListener("input", () => {
   field.format = data.get("format") || "";
   field.calc_operation = data.get("calc_operation") || "";
   field.calc_fields = (data.get("calc_fields") || "").split(",").map((value) => value.trim()).filter(Boolean);
+  field.condition_default = data.get("condition_default") || "";
+  const sources = data.getAll("condition_source");
+  const operators = data.getAll("condition_operator");
+  const values = data.getAll("condition_value");
+  const outputs = data.getAll("condition_output");
+  field.conditions = sources.map((source_field, index) => ({
+    source_field,
+    operator: operators[index] || "equals",
+    value: values[index] || "",
+    output: outputs[index] || "",
+  }));
   renderFields();
 });
 
@@ -590,6 +603,7 @@ function renderFillFields() {
       input.checked = field.value === "Yes";
       input.addEventListener("change", () => {
         field.value = input.checked ? "Yes" : "Off";
+        recomputeConditions();
       });
     } else if (field.type === "radio") {
       input = document.createElement("input");
@@ -602,6 +616,7 @@ function renderFillFields() {
           .forEach((item) => {
             item.value = item.id === field.id ? "Yes" : "Off";
           });
+        recomputeConditions();
       });
     } else if (field.type === "dropdown") {
       input = document.createElement("select");
@@ -614,12 +629,14 @@ function renderFillFields() {
       input.value = field.value || "";
       input.addEventListener("change", () => {
         field.value = input.value;
+        recomputeConditions();
       });
     } else if (field.multiline) {
       input = document.createElement("textarea");
       input.value = field.value || "";
       input.addEventListener("input", () => {
         field.value = input.value;
+        recomputeConditions();
       });
     } else {
       input = document.createElement("input");
@@ -627,11 +644,64 @@ function renderFillFields() {
       input.value = field.value || "";
       input.addEventListener("input", () => {
         field.value = input.value;
+        recomputeConditions();
       });
     }
     input.className = "fill-input";
+    input.dataset.fieldId = field.id;
+    if (field.conditions && field.conditions.length) {
+      input.classList.add("is-computed");
+      if (input.tagName === "SELECT" || field.type === "checkbox" || field.type === "radio") {
+        input.disabled = true;
+      } else {
+        input.readOnly = true;
+      }
+    }
     style(input);
     page.appendChild(input);
+  });
+  recomputeConditions();
+}
+
+function fieldMatchesCondition(sourceField, rule) {
+  const value = sourceField ? sourceField.value || "" : "";
+  switch (rule.operator) {
+    case "checked":
+      return value === "Yes";
+    case "not_checked":
+      return value !== "Yes";
+    case "empty":
+      return value === "";
+    case "not_empty":
+      return value !== "";
+    case "not_equals":
+      return value !== rule.value;
+    case "contains":
+      return value.includes(rule.value);
+    default:
+      return value === rule.value;
+  }
+}
+
+function recomputeConditions() {
+  const computedFields = state.fields.filter((field) => field.conditions && field.conditions.length);
+  if (!computedFields.length) return;
+  for (let pass = 0; pass < 5; pass += 1) {
+    const byName = new Map(state.fields.map((field) => [field.name, field]));
+    let changed = false;
+    computedFields.forEach((field) => {
+      const match = field.conditions.find((rule) => fieldMatchesCondition(byName.get(rule.source_field), rule));
+      const next = match ? match.output : field.condition_default || "";
+      if (field.value !== next) {
+        field.value = next;
+        changed = true;
+      }
+    });
+    if (!changed) break;
+  }
+  computedFields.forEach((field) => {
+    const input = document.querySelector(`.fill-input[data-field-id="${field.id}"]`);
+    if (input && input.value !== field.value) input.value = field.value;
   });
 }
 
@@ -908,11 +978,77 @@ function syncInspector() {
   inspector.format.value = field?.format || "";
   inspector.calc_operation.value = field?.calc_operation || "";
   inspector.calc_fields.value = field?.calc_fields?.join(", ") || "";
+  inspector.condition_default.value = field?.condition_default || "";
+  renderConditionRows(field);
 
   const groupNames = [...new Set(state.fields.filter((item) => item.type === "radio" && item.group).map((item) => item.group))];
   const datalist = document.querySelector("#group-suggestions");
   datalist.innerHTML = groupNames.map((name) => `<option value="${escapeHtml(name)}"></option>`).join("");
 }
+
+const CONDITION_OPERATORS = [
+  { value: "equals", label: "equals" },
+  { value: "not_equals", label: "does not equal" },
+  { value: "contains", label: "contains" },
+  { value: "checked", label: "is checked" },
+  { value: "not_checked", label: "is not checked" },
+  { value: "empty", label: "is empty" },
+  { value: "not_empty", label: "is not empty" },
+];
+
+function renderConditionRows(field) {
+  const conditions = field?.conditions || [];
+  const otherFields = state.fields.filter((item) => item.id !== field?.id);
+  conditionRows.innerHTML = conditions
+    .map(
+      (rule) => `
+    <div class="condition-row">
+      <select name="condition_source">
+        <option value=""></option>
+        ${otherFields
+          .map(
+            (item) =>
+              `<option value="${escapeHtml(item.name)}"${item.name === rule.source_field ? " selected" : ""}>${escapeHtml(item.name)}</option>`
+          )
+          .join("")}
+      </select>
+      <select name="condition_operator">
+        ${CONDITION_OPERATORS.map(
+          (op) => `<option value="${op.value}"${op.value === rule.operator ? " selected" : ""}>${op.label}</option>`
+        ).join("")}
+      </select>
+      <input name="condition_value" value="${escapeHtml(rule.value)}" placeholder="Value">
+      <input name="condition_output" value="${escapeHtml(rule.output)}" placeholder="Output">
+      <button type="button" class="remove-condition">Remove</button>
+    </div>`
+    )
+    .join("");
+}
+
+addConditionButton.addEventListener("click", () => {
+  const field = selectedField();
+  if (!field) return;
+  if (!state.inspectorDirty) {
+    pushHistory();
+    state.inspectorDirty = true;
+  }
+  field.conditions = field.conditions || [];
+  field.conditions.push({ source_field: "", operator: "equals", value: "", output: "" });
+  renderConditionRows(field);
+});
+
+conditionRows.addEventListener("click", (event) => {
+  if (!event.target.classList.contains("remove-condition")) return;
+  const field = selectedField();
+  if (!field) return;
+  if (!state.inspectorDirty) {
+    pushHistory();
+    state.inspectorDirty = true;
+  }
+  const index = [...conditionRows.children].indexOf(event.target.closest(".condition-row"));
+  field.conditions.splice(index, 1);
+  renderConditionRows(field);
+});
 
 function numberValue(value, fallback) {
   const parsed = Number.parseFloat(value);

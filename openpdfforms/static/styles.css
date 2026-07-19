@@ -201,6 +201,44 @@ button:disabled {
   margin-left: auto;
 }
 
+.conditions-block {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.conditions-block h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.condition-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.condition-row select, .condition-row input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 6px;
+  font-size: 12px;
+}
+
+.condition-row button {
+  padding: 6px 8px;
+}
+
+.fill-input.is-computed {
+  background: rgba(24, 32, 47, .06);
+  color: var(--muted);
+}
+
 .geometry-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
