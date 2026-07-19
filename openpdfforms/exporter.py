@@ -110,6 +110,11 @@ def _escape_pdf_string(value: str) -> str:
     return value.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
 
 
+def _pdf_name(value: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", value)
+    return safe or "Choice"
+
+
 def _strip_catalog_key(doc: fitz.Document, key: str) -> None:
     """Fully delete a top-level key from the document catalog's object text.
 
@@ -368,9 +373,20 @@ def _consolidate_radio_groups(doc: fitz.Document) -> None:
         doc.xref_set_key(parent_xref, "V", "/Off")
         doc.xref_set_key(parent_xref, "Kids", f"[{kid_refs_pdf}]")
 
-        for kid_xref in kid_xrefs:
+        for index, kid_xref in enumerate(kid_xrefs, start=1):
+            # PyMuPDF creates every radio widget with the same on-state name
+            # (/Yes). In a real radio group those appearance-state names must be
+            # distinct; otherwise a viewer can mark multiple kids selected for a
+            # single parent value. Use deterministic values so Acrobat JavaScript
+            # can test this.getField("group").value against Choice1, Choice2, ...
+            on_value = _pdf_name(f"Choice{index}")
+            obj = doc.xref_object(kid_xref, compressed=False)
+            obj = re.sub(r"(/AP\s*<<\s*/N\s*<<[^>]*?)\s/Yes(\s+\d+\s+0\s+R)", rf"\1 /{on_value}\2", obj, count=1, flags=re.S)
+            doc.update_object(kid_xref, obj)
             doc.xref_set_key(kid_xref, "Parent", f"{parent_xref} 0 R")
             doc.xref_set_key(kid_xref, "T", "null")
+            doc.xref_set_key(kid_xref, "AS", "/Off")
+            doc.xref_set_key(kid_xref, "V", "(Off)")
 
         ref_numbers = [r for r in ref_numbers if r not in kid_xrefs]
         ref_numbers.append(parent_xref)
