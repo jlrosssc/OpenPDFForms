@@ -217,9 +217,13 @@ button:disabled {
 
 .condition-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr auto;
+  grid-template-columns: 1fr 1fr;
   gap: 6px;
   align-items: center;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 6px;
 }
 
 .condition-row select, .condition-row input {
@@ -231,6 +235,7 @@ button:disabled {
 }
 
 .condition-row button {
+  grid-column: 1 / -1;
   padding: 6px 8px;
 }
 

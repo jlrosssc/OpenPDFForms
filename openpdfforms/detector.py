@@ -26,6 +26,71 @@ def render_pdf_pages(source_pdf: Path, render_dir: Path, zoom: float = 1.75) -> 
     return urls, page_sizes
 
 
+_WIDGET_TYPE_MAP = {
+    fitz.PDF_WIDGET_TYPE_TEXT: FieldType.text,
+    fitz.PDF_WIDGET_TYPE_CHECKBOX: FieldType.checkbox,
+    fitz.PDF_WIDGET_TYPE_RADIOBUTTON: FieldType.radio,
+    fitz.PDF_WIDGET_TYPE_COMBOBOX: FieldType.dropdown,
+    fitz.PDF_WIDGET_TYPE_LISTBOX: FieldType.dropdown,
+    fitz.PDF_WIDGET_TYPE_SIGNATURE: FieldType.digital_signature,
+}
+
+
+def import_existing_fields(source_pdf: Path) -> list[FormField] | None:
+    """Import a PDF's own existing AcroForm fields, e.g. one built in Adobe Acrobat.
+
+    Returns None if the PDF has no form fields at all, so the caller can
+    fall back to the heuristic detect_fields(). When real fields already
+    exist, guessing new candidates on top of them (detect_fields' job for
+    flat/scanned PDFs) would only produce a worse, redundant set -- wrong
+    types, generic names, no dropdown options, no signature fields -- so
+    real fields always take priority over heuristic detection.
+    """
+    with fitz.open(source_pdf) as doc:
+        if not doc.is_form_pdf:
+            return None
+
+        fields: list[FormField] = []
+        used_names: dict[str, int] = {}
+
+        def unique_name(base: str) -> str:
+            base = base or "field"
+            count = used_names.get(base, 0)
+            used_names[base] = count + 1
+            return base if count == 0 else f"{base}_{count + 1}"
+
+        for page_index, page in enumerate(doc):
+            for widget in page.widgets():
+                field_type = _WIDGET_TYPE_MAP.get(widget.field_type, FieldType.text)
+                label = (widget.field_label or widget.field_name or "").strip()
+                required = bool(widget.field_flags and widget.field_flags & 2)
+                group = widget.field_name if field_type == FieldType.radio else ""
+                rect = widget.rect
+
+                fields.append(
+                    FormField(
+                        id=uuid.uuid4().hex,
+                        page=page_index,
+                        type=field_type,
+                        name=unique_name(widget.field_name),
+                        x=round(float(rect.x0), 2),
+                        y=round(float(rect.y0), 2),
+                        width=round(float(rect.width), 2),
+                        height=round(float(rect.height), 2),
+                        label=label[:60],
+                        tooltip=label,
+                        required=required,
+                        options=list(widget.choice_values or []) if field_type == FieldType.dropdown else [],
+                        group=group,
+                        font_size=widget.text_fontsize or 10,
+                        multiline=field_type == FieldType.text
+                        and bool(widget.field_flags and widget.field_flags & fitz.PDF_TX_FIELD_IS_MULTILINE),
+                    )
+                )
+
+        return fields or None
+
+
 def detect_fields(source_pdf: Path, document_id: str) -> list[FormField]:
     fields: list[FormField] = []
     with fitz.open(source_pdf) as doc:

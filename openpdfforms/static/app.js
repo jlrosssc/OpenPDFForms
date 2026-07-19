@@ -1058,7 +1058,7 @@ function renderConditionRows(field) {
       (rule) => `
     <div class="condition-row">
       <select name="condition_source">
-        <option value=""></option>
+        <option value="">If field...</option>
         ${otherFields
           .map(
             (item) =>

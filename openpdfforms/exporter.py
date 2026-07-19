@@ -99,6 +99,14 @@ def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormFie
     ]
 
     with fitz.open(source_pdf) as doc:
+        # If source_pdf already has its own AcroForm fields (e.g. it was built in
+        # Adobe Acrobat and imported via import_existing_fields), strip them first --
+        # otherwise every field in `fields` gets added as a *new* widget alongside
+        # the original one it came from, doubling every field under the same name.
+        for page in doc:
+            for widget in list(page.widgets()):
+                page.delete_widget(widget)
+
         for field in fields:
             page = doc[field.page]
             widget = fitz.Widget()

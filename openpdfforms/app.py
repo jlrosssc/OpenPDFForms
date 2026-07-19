@@ -10,7 +10,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from .detector import detect_fields, render_pdf_pages
+from .detector import detect_fields, import_existing_fields, render_pdf_pages
 from .exporter import export_fillable_pdf
 from .models import DocumentInfo, ExportRequest, ExportResponse, FillSignRequest, PreviewResponse, ProjectSaveRequest, ProjectSummary
 from .signing import CA_CERT_PATH, apply_field_values, ensure_root_ca, sign_field
@@ -82,7 +82,9 @@ async def upload_document(file: UploadFile = File(...)) -> DocumentInfo:
 
     render_dir = reset_render_dir(document_id)
     render_urls, page_sizes = render_pdf_pages(source_path, render_dir)
-    fields = detect_fields(source_path, document_id)
+    fields = import_existing_fields(source_path)
+    if fields is None:
+        fields = detect_fields(source_path, document_id)
     return DocumentInfo(
         document_id=document_id,
         filename=file.filename,
