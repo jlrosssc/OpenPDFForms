@@ -59,3 +59,10 @@ OpenPDFForms:
 
 These services are not bundled as source code in this repository. Review
 the license terms for the exact container image versions you deploy.
+
+
+## Adobe Compatibility References
+
+OpenPDFForms implements standards-based PDF AcroForm fields and Acrobat JavaScript-compatible snippets for interoperability. Adobe Acrobat, Adobe Reader, Adobe Sign, Acrobat JavaScript, and related names are trademarks or product names of Adobe or its affiliates. They are referenced only to describe compatibility goals and user expectations; no Adobe source code, SDK code, fonts, icons, or proprietary assets are bundled in this repository.
+
+Useful public references for implementers include Adobe's Acrobat JavaScript documentation and public Acrobat form/signature help pages. Those documents are external references only and are not incorporated into this project as source material.

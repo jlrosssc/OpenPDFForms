@@ -12,7 +12,10 @@ class FieldType(str, Enum):
     checkbox = "checkbox"
     radio = "radio"
     dropdown = "dropdown"
+    listbox = "listbox"
+    button = "button"
     signature = "signature"
+    initials = "initials"
     digital_signature = "digital_signature"
     date = "date"
 
@@ -36,6 +39,14 @@ class FormField(BaseModel):
     label: str = ""
     tooltip: str = ""
     required: bool = False
+    read_only: bool = False
+    hidden: bool = False
+    printable: bool = True
+    no_export: bool = False
+    default_value: str = ""
+    text_alignment: str = "left"
+    border_style: str = "solid"
+    tab_order: int = 0
     options: list[str] = Field(default_factory=list)
     group: str = ""
     value: str = ""
@@ -54,6 +65,7 @@ class FormField(BaseModel):
     custom_script_format: str = ""
     custom_script_validate: str = ""
     custom_script_calculate: str = ""
+    multi_select: bool = False
 
 
 class DocumentInfo(BaseModel):

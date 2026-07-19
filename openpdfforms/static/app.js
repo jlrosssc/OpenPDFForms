@@ -295,19 +295,28 @@ inspector.addEventListener("input", () => {
   const data = new FormData(inspector);
   field.name = data.get("name") || field.name;
   field.label = data.get("label") || "";
-  field.tooltip = field.label;
+  field.tooltip = data.get("tooltip") || field.label || "";
   field.type = data.get("type") || field.type;
   field.x = numberValue(data.get("x"), field.x);
   field.y = numberValue(data.get("y"), field.y);
   field.width = Math.max(1, numberValue(data.get("width"), field.width));
   field.height = Math.max(1, numberValue(data.get("height"), field.height));
   field.options = (data.get("options") || "").split("\n").map((value) => value.trim()).filter(Boolean);
+  field.default_value = data.get("default_value") || "";
   field.required = data.get("required") === "on";
+  field.read_only = data.get("read_only") === "on";
+  field.hidden = data.get("hidden") === "on";
+  field.printable = data.get("printable") === "on";
+  field.no_export = data.get("no_export") === "on";
   field.group = data.get("group") || "";
   field.font_size = Math.max(1, numberValue(data.get("font_size"), field.font_size || 10));
   field.max_length = Math.max(0, Math.round(numberValue(data.get("max_length"), field.max_length || 0)));
   field.multiline = data.get("multiline") === "on";
   field.comb = data.get("comb") === "on";
+  field.multi_select = data.get("multi_select") === "on";
+  field.text_alignment = data.get("text_alignment") || "left";
+  field.border_style = data.get("border_style") || "solid";
+  field.tab_order = Math.max(0, Math.round(numberValue(data.get("tab_order"), field.tab_order || 0)));
   field.border_color = data.get("border_color_on") === "on" ? data.get("border_color") : "";
   field.background_color = data.get("background_color_on") === "on" ? data.get("background_color") : "";
   field.format = data.get("format") || "";
@@ -578,18 +587,20 @@ function renderFillFields() {
       el.style.height = `${field.height * scaleY}px`;
     };
 
-    if (field.type === "signature" || field.type === "digital_signature") {
+    if (field.hidden) return;
+
+    if (field.type === "signature" || field.type === "initials" || field.type === "digital_signature") {
       const box = document.createElement("div");
       box.className = `fill-sign-box fill-sign-box-${field.type}`;
       style(box);
       const signed = state.signedFields.has(field.name);
-      box.textContent = signed ? "Signed" : field.type === "signature" ? "Click to Mock Sign" : "Click to E Sign";
+      box.textContent = signed ? "Signed" : field.type === "digital_signature" ? "Click to E Sign" : field.type === "initials" ? "Click to Initial" : "Click to Mock Sign";
       if (signed) {
         box.classList.add("is-signed");
       } else {
         box.addEventListener("click", (event) => {
           event.stopPropagation();
-          if (field.type === "signature") {
+          if (field.type === "signature" || field.type === "initials") {
             openMockSignDialog(field);
           } else {
             openEsignDialog(field);
@@ -622,22 +633,26 @@ function renderFillFields() {
           });
         recomputeConditions();
       });
-    } else if (field.type === "dropdown") {
+    } else if (field.type === "dropdown" || field.type === "listbox") {
       input = document.createElement("select");
+      if (field.type === "listbox") {
+        input.size = Math.min(Math.max((field.options || []).length, 2), 8);
+        input.multiple = Boolean(field.multi_select);
+      }
       (field.options || []).forEach((option) => {
         const opt = document.createElement("option");
         opt.value = option;
         opt.textContent = option;
         input.appendChild(opt);
       });
-      input.value = field.value || "";
+      input.value = field.value || field.default_value || "";
       input.addEventListener("change", () => {
-        field.value = input.value;
+        field.value = input.multiple ? [...input.selectedOptions].map((option) => option.value).join(", ") : input.value;
         recomputeConditions();
       });
     } else if (field.multiline) {
       input = document.createElement("textarea");
-      input.value = field.value || "";
+      input.value = field.value || field.default_value || "";
       input.addEventListener("input", () => {
         field.value = input.value;
         recomputeConditions();
@@ -645,7 +660,7 @@ function renderFillFields() {
     } else {
       input = document.createElement("input");
       input.type = "text";
-      input.value = field.value || "";
+      input.value = field.value || field.default_value || "";
       input.addEventListener("input", () => {
         field.value = input.value;
         recomputeConditions();
@@ -653,6 +668,13 @@ function renderFillFields() {
     }
     input.className = "fill-input";
     input.dataset.fieldId = field.id;
+    if (field.read_only) {
+      if (input.tagName === "SELECT" || field.type === "checkbox" || field.type === "radio") {
+        input.disabled = true;
+      } else {
+        input.readOnly = true;
+      }
+    }
     if (field.conditions && field.conditions.length) {
       input.classList.add("is-computed");
       if (input.tagName === "SELECT" || field.type === "checkbox" || field.type === "radio") {
@@ -743,7 +765,7 @@ function renderFields() {
       selectOnly(field.id);
       openFieldContextMenu(event, field);
     });
-    if (field.type === "signature" && field.signature_data_url) {
+    if ((field.type === "signature" || field.type === "initials") && field.signature_data_url) {
       const image = document.createElement("img");
       image.className = "signature-image";
       image.src = field.signature_data_url;
@@ -944,8 +966,8 @@ function placeField(type, pageElement, pageIndex, event) {
   const [pdfWidth, pdfHeight] = state.pageSizes[pageIndex];
   const scaleX = img.clientWidth / pdfWidth;
   const scaleY = img.clientHeight / pdfHeight;
-  const width = type === "checkbox" || type === "radio" ? 14 : type === "digital_signature" ? 200 : 160;
-  const height = type === "checkbox" || type === "radio" ? 14 : type === "digital_signature" ? 60 : 20;
+  const width = type === "checkbox" || type === "radio" ? 14 : type === "digital_signature" ? 200 : type === "initials" ? 80 : 160;
+  const height = type === "checkbox" || type === "radio" ? 14 : type === "digital_signature" ? 60 : type === "initials" ? 28 : type === "listbox" ? 70 : 20;
   const x = Math.max(0, (event.clientX - rect.left) / scaleX - width / 2);
   const y = Math.max(0, (event.clientY - rect.top) / scaleY - height / 2);
   const id = generateId();
@@ -962,10 +984,19 @@ function placeField(type, pageElement, pageIndex, event) {
     label: "",
     tooltip: "",
     required: false,
+    read_only: false,
+    hidden: false,
+    printable: true,
+    no_export: false,
+    default_value: "",
+    text_alignment: "left",
+    border_style: "solid",
+    tab_order: 0,
     options: [],
     group: "",
     value: "",
     signature_data_url: "",
+    multi_select: false,
   });
   state.currentPage = pageIndex;
   if (state.placingRepeat) {
@@ -1030,12 +1061,22 @@ function syncInspector() {
   inspector.width.value = field ? round(field.width) : "";
   inspector.height.value = field ? round(field.height) : "";
   inspector.options.value = field?.options?.join("\n") || "";
+  inspector.default_value.value = field?.default_value || "";
+  inspector.tooltip.value = field?.tooltip || "";
   inspector.required.checked = Boolean(field?.required);
+  inspector.read_only.checked = Boolean(field?.read_only);
+  inspector.hidden.checked = Boolean(field?.hidden);
+  inspector.printable.checked = field ? field.printable !== false : true;
+  inspector.no_export.checked = Boolean(field?.no_export);
   inspector.group.value = field?.group || "";
   inspector.font_size.value = field ? field.font_size || 10 : "";
   inspector.max_length.value = field ? field.max_length || 0 : "";
   inspector.multiline.checked = Boolean(field?.multiline);
   inspector.comb.checked = Boolean(field?.comb);
+  inspector.multi_select.checked = Boolean(field?.multi_select);
+  inspector.text_alignment.value = field?.text_alignment || "left";
+  inspector.border_style.value = field?.border_style || "solid";
+  inspector.tab_order.value = field ? field.tab_order || 0 : "";
   inspector.border_color_on.checked = Boolean(field?.border_color);
   inspector.border_color.value = field?.border_color || "#1769aa";
   inspector.background_color_on.checked = Boolean(field?.background_color);
@@ -1267,7 +1308,25 @@ function confirmEsign() {
   });
 }
 
+function missingRequiredFields() {
+  return state.fields.filter((field) => {
+    if (!field.required || field.hidden || field.read_only || field.no_export) return false;
+    if (field.type === "signature" || field.type === "initials" || field.type === "digital_signature") {
+      return !state.signedFields.has(field.name) && field.name !== state.pendingSignField;
+    }
+    return !String(field.value || field.default_value || "").trim() || field.value === "Off";
+  });
+}
+
+function validateRequiredBeforeSign() {
+  const missing = missingRequiredFields();
+  if (!missing.length) return true;
+  alert(`Fill required fields before signing:\n${missing.map((field) => `- ${field.label || field.name}`).join("\n")}`);
+  return false;
+}
+
 async function submitFillAndSign(fieldName, kind, extra) {
+  if (!validateRequiredBeforeSign()) return;
   const response = await fetch(appUrl(`api/documents/${state.documentId}/fill-and-sign`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },

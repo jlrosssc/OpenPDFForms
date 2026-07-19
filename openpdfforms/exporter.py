@@ -7,6 +7,22 @@ import fitz
 
 from .models import ConditionRule, FieldType, FormField
 
+FIELD_FLAG_READ_ONLY = 1
+FIELD_FLAG_REQUIRED = 2
+FIELD_FLAG_NO_EXPORT = 4
+CHOICE_FLAG_MULTI_SELECT = 1 << 21
+ANNOT_FLAG_HIDDEN = 2
+ANNOT_FLAG_PRINT = 4
+BORDER_STYLES = {
+    "solid": "/S",
+    "dashed": "/D",
+    "beveled": "/B",
+    "inset": "/I",
+    "underline": "/U",
+}
+TEXT_ALIGNMENTS = {"left": 0, "center": 1, "right": 2}
+
+
 FORMAT_SCRIPTS = {
     "number": 'AFNumber_Format(2, 0, 0, 0, "", false);',
     "integer": 'AFNumber_Format(0, 0, 0, 0, "", false);',
@@ -130,9 +146,43 @@ def _strip_catalog_key(doc: fitz.Document, key: str) -> None:
     doc.update_object(catalog_xref, catalog_text[:key_start] + catalog_text[cursor:])
 
 
+def _field_flags(field: FormField) -> int:
+    flags = 0
+    if field.read_only:
+        flags |= FIELD_FLAG_READ_ONLY
+    if field.required:
+        flags |= FIELD_FLAG_REQUIRED
+    if field.no_export:
+        flags |= FIELD_FLAG_NO_EXPORT
+    return flags
+
+
+def _apply_widget_pdf_properties(doc: fitz.Document, xref: int, field: FormField) -> None:
+    annot_flags = 0
+    if field.hidden:
+        annot_flags |= ANNOT_FLAG_HIDDEN
+    if field.printable and not field.hidden:
+        annot_flags |= ANNOT_FLAG_PRINT
+    doc.xref_set_key(xref, "F", str(annot_flags))
+
+    if field.default_value:
+        escaped_default = _escape_pdf_string(field.default_value)
+        doc.xref_set_key(xref, "DV", f"({escaped_default})")
+        if not field.value and field.type not in (FieldType.checkbox, FieldType.radio, FieldType.signature, FieldType.initials, FieldType.digital_signature):
+            doc.xref_set_key(xref, "V", f"({escaped_default})")
+
+    alignment = TEXT_ALIGNMENTS.get(field.text_alignment)
+    if alignment is not None:
+        doc.xref_set_key(xref, "Q", str(alignment))
+
+    border_style = BORDER_STYLES.get(field.border_style or "solid")
+    if border_style:
+        doc.xref_set_key(xref, "BS", f"<< /W 1 /S {border_style} >>")
+
+
 def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormField]) -> None:
     signature_field_names = [
-        field.name for field in fields if field.type in (FieldType.signature, FieldType.digital_signature)
+        field.name for field in fields if field.type in (FieldType.signature, FieldType.initials, FieldType.digital_signature)
     ]
 
     with fitz.open(source_pdf) as doc:
@@ -176,7 +226,7 @@ def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormFie
         if acro_entry[0] == "xref":
             doc.xref_set_key(int(acro_entry[1].split()[0]), "Fields", "[]")
 
-        for field in fields:
+        for field in sorted(fields, key=lambda item: (item.page, item.tab_order or 0, item.y, item.x)):
             page = doc[field.page]
             widget = fitz.Widget()
             widget.field_name = field.name
@@ -184,7 +234,7 @@ def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormFie
             widget.rect = fitz.Rect(field.x, field.y, field.x + field.width, field.y + field.height)
             widget.text_font = "Helv"
             widget.text_fontsize = field.font_size or 10
-            widget.field_flags = 2 if field.required else 0
+            widget.field_flags = _field_flags(field)
 
             border_rgb = _hex_to_rgb(field.border_color)
             if border_rgb:
@@ -206,9 +256,17 @@ def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormFie
             elif field.type == FieldType.dropdown:
                 widget.field_type = fitz.PDF_WIDGET_TYPE_COMBOBOX
                 widget.choice_values = field.options or [""]
-            elif field.type == FieldType.signature:
+            elif field.type == FieldType.listbox:
+                widget.field_type = fitz.PDF_WIDGET_TYPE_LISTBOX
+                widget.choice_values = field.options or [""]
+                if field.multi_select:
+                    widget.field_flags |= CHOICE_FLAG_MULTI_SELECT
+            elif field.type == FieldType.button:
+                widget.field_type = getattr(fitz, "PDF_WIDGET_TYPE_BUTTON", fitz.PDF_WIDGET_TYPE_TEXT)
+                widget.field_label = widget.field_label or field.label or "Button"
+            elif field.type in (FieldType.signature, FieldType.initials):
                 widget.field_type = fitz.PDF_WIDGET_TYPE_SIGNATURE
-                widget.field_label = widget.field_label or "Mock Sign"
+                widget.field_label = widget.field_label or ("Initials" if field.type == FieldType.initials else "Mock Sign")
             elif field.type == FieldType.digital_signature:
                 widget.field_type = fitz.PDF_WIDGET_TYPE_SIGNATURE
                 widget.field_label = widget.field_label or "E Sign"
@@ -245,8 +303,9 @@ def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormFie
                 widget.script_calc = field.custom_script_calculate
 
             annot = page.add_widget(widget)
+            _apply_widget_pdf_properties(doc, annot.xref, field)
 
-            if field.type in (FieldType.signature, FieldType.digital_signature):
+            if field.type in (FieldType.signature, FieldType.initials, FieldType.digital_signature):
                 # SigFieldLock: tells any spec-compliant viewer (Acrobat, Reader, etc.)
                 # to lock other fields the moment *this* field is actually signed with a
                 # real digital ID -- entirely client-side, no dependency on this app's

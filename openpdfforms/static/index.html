@@ -50,7 +50,10 @@
         <button data-add="checkbox">+ Checkbox</button>
         <button data-add="radio">+ Radio</button>
         <button data-add="dropdown">+ Dropdown</button>
+        <button data-add="listbox">+ List Box</button>
+        <button data-add="button">+ Button</button>
         <button data-add="signature" title="A signature box that's signed later, in Fill &amp; Sign mode, by typing a name rendered in a script font. Locks the document at that point.">+ Mock Sign</button>
+        <button data-add="initials" title="A compact typed or drawn initials box signed later in Fill &amp; Sign mode.">+ Initials</button>
         <button data-add="digital_signature" title="A signature box that's signed later, in Fill &amp; Sign mode, with a real cryptographic signature for tracking/traceability. Locks the document at that point.">+ E Sign</button>
         <button data-add="date">+ Date</button>
       </div>
@@ -78,7 +81,10 @@
             <option value="checkbox">Checkbox</option>
             <option value="radio">Radio</option>
             <option value="dropdown">Dropdown</option>
+            <option value="listbox">List Box</option>
+            <option value="button">Button</option>
             <option value="signature">Mock Sign</option>
+            <option value="initials">Initials</option>
             <option value="digital_signature">E Sign</option>
             <option value="date">Date</option>
           </select>
@@ -89,7 +95,9 @@
           <label>W<input name="width" type="number" step="0.1" min="1"></label>
           <label>H<input name="height" type="number" step="0.1" min="1"></label>
         </div>
-        <label>Options<textarea name="options" rows="3" placeholder="One dropdown option per line"></textarea></label>
+        <label>Options<textarea name="options" rows="3" placeholder="One dropdown/list option per line"></textarea></label>
+        <label>Default value<input name="default_value"></label>
+        <label>Tooltip<input name="tooltip" placeholder="Help text shown by PDF viewers"></label>
         <label>Group (radio buttons with the same group act as one choice)
           <input name="group" list="group-suggestions">
           <datalist id="group-suggestions"></datalist>
@@ -100,6 +108,26 @@
         </div>
         <label class="check"><input name="multiline" type="checkbox"> Multiline</label>
         <label class="check"><input name="comb" type="checkbox"> Comb (evenly spaced characters)</label>
+        <label class="check"><input name="multi_select" type="checkbox"> Multi-select list box</label>
+        <div class="geometry-grid">
+          <label>Text align
+            <select name="text_alignment">
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+            </select>
+          </label>
+          <label>Border style
+            <select name="border_style">
+              <option value="solid">Solid</option>
+              <option value="dashed">Dashed</option>
+              <option value="beveled">Beveled</option>
+              <option value="inset">Inset</option>
+              <option value="underline">Underline</option>
+            </select>
+          </label>
+        </div>
+        <label>Tab order<input name="tab_order" type="number" step="1" min="0"></label>
         <div class="color-grid">
           <label class="color-toggle"><input name="border_color_on" type="checkbox"><span>Border</span><input name="border_color" type="color" value="#1769aa"></label>
           <label class="color-toggle"><input name="background_color_on" type="checkbox"><span>Background</span><input name="background_color" type="color" value="#ffffff"></label>
@@ -142,6 +170,10 @@
           <label>Calculate script<textarea name="custom_script_calculate" class="code-input" rows="3" placeholder="e.g. event.value = this.getField(&quot;A&quot;).value + this.getField(&quot;B&quot;).value;"></textarea></label>
         </div>
         <label class="check"><input name="required" type="checkbox"> Required</label>
+        <label class="check"><input name="read_only" type="checkbox"> Read-only</label>
+        <label class="check"><input name="hidden" type="checkbox"> Hidden</label>
+        <label class="check"><input name="printable" type="checkbox"> Print</label>
+        <label class="check"><input name="no_export" type="checkbox"> Do not export value</label>
         <button id="delete-field" type="button">Delete Field</button>
       </form>
     </aside>

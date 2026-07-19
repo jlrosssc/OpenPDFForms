@@ -222,7 +222,7 @@ def apply_field_values(input_pdf: Path, output_pdf: Path, fields: list[FormField
             for widget in widgets:
                 doc.xref_set_key(widget.xref, "V", state)
                 doc.xref_set_key(widget.xref, "AS", state)
-        elif field.type in (FieldType.signature, FieldType.digital_signature):
+        elif field.type in (FieldType.signature, FieldType.initials, FieldType.digital_signature):
             continue
         else:
             if not field.value:

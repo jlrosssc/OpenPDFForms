@@ -31,7 +31,7 @@ _WIDGET_TYPE_MAP = {
     fitz.PDF_WIDGET_TYPE_CHECKBOX: FieldType.checkbox,
     fitz.PDF_WIDGET_TYPE_RADIOBUTTON: FieldType.radio,
     fitz.PDF_WIDGET_TYPE_COMBOBOX: FieldType.dropdown,
-    fitz.PDF_WIDGET_TYPE_LISTBOX: FieldType.dropdown,
+    fitz.PDF_WIDGET_TYPE_LISTBOX: FieldType.listbox,
     fitz.PDF_WIDGET_TYPE_SIGNATURE: FieldType.digital_signature,
 }
 
@@ -64,6 +64,8 @@ def import_existing_fields(source_pdf: Path) -> list[FormField] | None:
                 field_type = _WIDGET_TYPE_MAP.get(widget.field_type, FieldType.text)
                 label = (widget.field_label or widget.field_name or "").strip()
                 required = bool(widget.field_flags and widget.field_flags & 2)
+                read_only = bool(widget.field_flags and widget.field_flags & 1)
+                no_export = bool(widget.field_flags and widget.field_flags & 4)
                 group = widget.field_name if field_type == FieldType.radio else ""
                 rect = widget.rect
 
@@ -80,7 +82,10 @@ def import_existing_fields(source_pdf: Path) -> list[FormField] | None:
                         label=label[:60],
                         tooltip=label,
                         required=required,
-                        options=list(widget.choice_values or []) if field_type == FieldType.dropdown else [],
+                        read_only=read_only,
+                        no_export=no_export,
+                        default_value=str(widget.field_value or "") if widget.field_value else "",
+                        options=list(widget.choice_values or []) if field_type in (FieldType.dropdown, FieldType.listbox) else [],
                         group=group,
                         font_size=widget.text_fontsize or 10,
                         multiline=field_type == FieldType.text

@@ -330,6 +330,21 @@ button:disabled {
   border-color: #2f7d54;
 }
 
+.field[data-type="listbox"] {
+  background: rgba(13, 148, 136, .16);
+  border-color: #0f766e;
+}
+
+.field[data-type="button"] {
+  background: rgba(15, 23, 42, .08);
+  border-color: #475569;
+}
+
+.field[data-type="initials"] {
+  background: rgba(180, 83, 9, .16);
+  border: 2px dashed #b45309;
+}
+
 .field[data-type="digital_signature"] {
   border: 2px dashed #7c3aed;
   background: repeating-linear-gradient(
