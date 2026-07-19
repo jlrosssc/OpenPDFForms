@@ -100,6 +100,48 @@ def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormFie
     ]
 
     with fitz.open(source_pdf) as doc:
+        # A source PDF may carry a /Perms /UR3 entry (Adobe "Reader Extensions"
+        # usage-rights signature, e.g. from Adobe LiveCycle) -- a cryptographic
+        # signature over a specific byte range of that *original* file. Rebuilding
+        # the document's fields (below) completely changes its byte layout, so that
+        # signature becomes stale and no longer validates against the new content.
+        # Verified against a real Adobe-processed form: Acrobat's own field
+        # detector ("Prepare a form") found zero fields in a document carrying this
+        # stale signature, despite the AcroForm/Fields structure itself checking out
+        # clean under independent inspection. A broken rights signature is worse
+        # than none, so it's removed outright rather than left dangling.
+        #
+        # xref_set_key(..., "null") only sets the value to the PDF null object --
+        # spec-equivalent to absence, but the key literally remains in the
+        # serialized bytes ("/Perms null"). Given Acrobat is demonstrably stricter
+        # here than other tools, the key is fully deleted from the object text
+        # instead of relying on that equivalence.
+        catalog_xref = doc.pdf_catalog()
+        catalog_text = doc.xref_object(catalog_xref)
+        perms_start = catalog_text.find("/Perms")
+        if perms_start != -1:
+            cursor = perms_start + len("/Perms")
+            while catalog_text[cursor] in " \t\r\n":
+                cursor += 1
+            if catalog_text[cursor : cursor + 2] == "<<":
+                depth = 0
+                while cursor < len(catalog_text):
+                    if catalog_text[cursor : cursor + 2] == "<<":
+                        depth += 1
+                        cursor += 2
+                    elif catalog_text[cursor : cursor + 2] == ">>":
+                        depth -= 1
+                        cursor += 2
+                        if depth == 0:
+                            break
+                    else:
+                        cursor += 1
+            else:
+                cursor = catalog_text.find("/", cursor)
+                if cursor == -1:
+                    cursor = catalog_text.rfind(">>")
+            doc.update_object(catalog_xref, catalog_text[:perms_start] + catalog_text[cursor:])
+
         # If source_pdf already has its own AcroForm fields (e.g. it was built in
         # Adobe Acrobat and imported via import_existing_fields), strip them first --
         # otherwise every field in `fields` gets added as a *new* widget alongside
