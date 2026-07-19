@@ -94,53 +94,64 @@ def _escape_pdf_string(value: str) -> str:
     return value.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
 
 
+def _strip_catalog_key(doc: fitz.Document, key: str) -> None:
+    """Fully delete a top-level key from the document catalog's object text.
+
+    xref_set_key(..., "null") only sets the PDF null object -- spec-equivalent
+    to absence, but the key literally remains in the serialized bytes (e.g.
+    "/Perms null"). Acrobat has been observed to be stricter here than other
+    tools, so keys are excised from the object text entirely rather than
+    relying on that equivalence.
+    """
+    catalog_xref = doc.pdf_catalog()
+    catalog_text = doc.xref_object(catalog_xref)
+    key_start = catalog_text.find(f"/{key}")
+    if key_start == -1:
+        return
+    cursor = key_start + len(key) + 1
+    while catalog_text[cursor] in " \t\r\n":
+        cursor += 1
+    if catalog_text[cursor : cursor + 2] == "<<":
+        depth = 0
+        while cursor < len(catalog_text):
+            if catalog_text[cursor : cursor + 2] == "<<":
+                depth += 1
+                cursor += 2
+            elif catalog_text[cursor : cursor + 2] == ">>":
+                depth -= 1
+                cursor += 2
+                if depth == 0:
+                    break
+            else:
+                cursor += 1
+    else:
+        next_key = catalog_text.find("/", cursor)
+        cursor = next_key if next_key != -1 else catalog_text.rfind(">>")
+    doc.update_object(catalog_xref, catalog_text[:key_start] + catalog_text[cursor:])
+
+
 def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormField]) -> None:
     signature_field_names = [
         field.name for field in fields if field.type in (FieldType.signature, FieldType.digital_signature)
     ]
 
     with fitz.open(source_pdf) as doc:
-        # A source PDF may carry a /Perms /UR3 entry (Adobe "Reader Extensions"
-        # usage-rights signature, e.g. from Adobe LiveCycle) -- a cryptographic
-        # signature over a specific byte range of that *original* file. Rebuilding
-        # the document's fields (below) completely changes its byte layout, so that
-        # signature becomes stale and no longer validates against the new content.
-        # Verified against a real Adobe-processed form: Acrobat's own field
-        # detector ("Prepare a form") found zero fields in a document carrying this
-        # stale signature, despite the AcroForm/Fields structure itself checking out
-        # clean under independent inspection. A broken rights signature is worse
-        # than none, so it's removed outright rather than left dangling.
-        #
-        # xref_set_key(..., "null") only sets the value to the PDF null object --
-        # spec-equivalent to absence, but the key literally remains in the
-        # serialized bytes ("/Perms null"). Given Acrobat is demonstrably stricter
-        # here than other tools, the key is fully deleted from the object text
-        # instead of relying on that equivalence.
-        catalog_xref = doc.pdf_catalog()
-        catalog_text = doc.xref_object(catalog_xref)
-        perms_start = catalog_text.find("/Perms")
-        if perms_start != -1:
-            cursor = perms_start + len("/Perms")
-            while catalog_text[cursor] in " \t\r\n":
-                cursor += 1
-            if catalog_text[cursor : cursor + 2] == "<<":
-                depth = 0
-                while cursor < len(catalog_text):
-                    if catalog_text[cursor : cursor + 2] == "<<":
-                        depth += 1
-                        cursor += 2
-                    elif catalog_text[cursor : cursor + 2] == ">>":
-                        depth -= 1
-                        cursor += 2
-                        if depth == 0:
-                            break
-                    else:
-                        cursor += 1
-            else:
-                cursor = catalog_text.find("/", cursor)
-                if cursor == -1:
-                    cursor = catalog_text.rfind(">>")
-            doc.update_object(catalog_xref, catalog_text[:perms_start] + catalog_text[cursor:])
+        # A source PDF may carry catalog-level entries computed for its *original*
+        # content that go stale once the document's fields are rebuilt below:
+        # - /Perms /UR3: an Adobe "Reader Extensions" usage-rights signature (e.g.
+        #   from Adobe LiveCycle) over a specific byte range of the original file.
+        #   Verified against a real Adobe-processed form: with this stale signature
+        #   present, Acrobat's own field detector ("Prepare a form") found *zero*
+        #   fields, despite the AcroForm/Fields structure checking out clean under
+        #   independent inspection (PyMuPDF and qpdf both). A broken rights
+        #   signature is worse than none.
+        # - /OpenAction, /AA: catalog-level actions (e.g. a GoTo view-positioning
+        #   action) that can reference page/field state from before the rebuild.
+        #   Confirmed harmless in practice (a plain GoTo, no JavaScript) but
+        #   triggers an unprompted Acrobat compatibility warning dialog on every
+        #   open of an exported form -- unnecessary friction worth removing.
+        for key in ("Perms", "OpenAction", "AA"):
+            _strip_catalog_key(doc, key)
 
         # If source_pdf already has its own AcroForm fields (e.g. it was built in
         # Adobe Acrobat and imported via import_existing_fields), strip them first --
