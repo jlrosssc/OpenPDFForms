@@ -39,6 +39,15 @@ button, input, select, textarea {
   font-size: 20px;
 }
 
+.app-version {
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
 .topbar p {
   margin: 3px 0 0;
   color: var(--muted);
