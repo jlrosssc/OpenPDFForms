@@ -669,6 +669,12 @@ function loadDocumentInfo(info) {
   state.selectedIds.clear();
   state.activeId = null;
   state.currentPage = 0;
+  const firstLogicField = state.fields.find((field) => field.conditions && field.conditions.length);
+  if (firstLogicField) {
+    state.selectedIds = new Set([firstLogicField.id]);
+    state.activeId = firstLogicField.id;
+    state.currentPage = firstLogicField.page;
+  }
   state.history = [];
   state.future = [];
   state.zoom = 1;
@@ -1445,8 +1451,13 @@ function buildGeneratedConditionScript(field) {
 
 function refreshGeneratedConditionScript(field) {
   if (!generatedConditionScript || !useGeneratedConditionScriptButton) return;
+  if (!field) {
+    generatedConditionScript.value = "Select a field to view generated conditional JavaScript.";
+    useGeneratedConditionScriptButton.disabled = true;
+    return;
+  }
   const script = buildGeneratedConditionScript(field);
-  generatedConditionScript.value = script || "No conditional logic is currently defined for this field.";
+  generatedConditionScript.value = script || "No conditional logic is defined for the selected field.";
   useGeneratedConditionScriptButton.disabled = !script;
 }
 
