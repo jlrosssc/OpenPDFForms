@@ -134,6 +134,13 @@
           <button id="add-condition" type="button">+ Add Condition</button>
           <label>Default output (if no rule matches)<input name="condition_default" placeholder="Leave blank for empty"></label>
         </div>
+        <div class="conditions-block">
+          <h2>Custom Script (Advanced)</h2>
+          <p class="hint">Real Acrobat JavaScript, entered once here at form-creation time -- not exposed to whoever fills the form out later. Runs in any PDF viewer that executes PDF JavaScript (Acrobat/Reader); has no effect in viewers that don't. Overrides Format/Calculation/Conditional Logic above if both are set. See <a href="https://opensource.adobe.com/dc-acrobat-sdk-docs/library/jsapiref/index.html" target="_blank" rel="noopener">Adobe's Acrobat JS API reference</a>.</p>
+          <label>Format script<textarea name="custom_script_format" class="code-input" rows="3" placeholder="e.g. event.value = event.value.toUpperCase();"></textarea></label>
+          <label>Validate script<textarea name="custom_script_validate" class="code-input" rows="3" placeholder="e.g. if (event.value.length > 10) event.rc = false;"></textarea></label>
+          <label>Calculate script<textarea name="custom_script_calculate" class="code-input" rows="3" placeholder="e.g. event.value = this.getField(&quot;A&quot;).value + this.getField(&quot;B&quot;).value;"></textarea></label>
+        </div>
         <label class="check"><input name="required" type="checkbox"> Required</label>
         <button id="delete-field" type="button">Delete Field</button>
       </form>

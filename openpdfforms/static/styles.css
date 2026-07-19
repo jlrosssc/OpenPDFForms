@@ -263,6 +263,12 @@ button:disabled {
   background: var(--field);
 }
 
+.code-input {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  resize: vertical;
+}
+
 .fill-input.is-computed {
   background: rgba(24, 32, 47, .06);
   color: var(--muted);

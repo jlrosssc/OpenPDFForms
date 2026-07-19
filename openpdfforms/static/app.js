@@ -314,6 +314,9 @@ inspector.addEventListener("input", () => {
   field.calc_operation = data.get("calc_operation") || "";
   field.calc_fields = (data.get("calc_fields") || "").split(",").map((value) => value.trim()).filter(Boolean);
   field.condition_default = data.get("condition_default") || "";
+  field.custom_script_format = data.get("custom_script_format") || "";
+  field.custom_script_validate = data.get("custom_script_validate") || "";
+  field.custom_script_calculate = data.get("custom_script_calculate") || "";
   const sources = data.getAll("condition_source");
   const operators = data.getAll("condition_operator");
   const values = data.getAll("condition_value");
@@ -1041,6 +1044,9 @@ function syncInspector() {
   inspector.calc_operation.value = field?.calc_operation || "";
   inspector.calc_fields.value = field?.calc_fields?.join(", ") || "";
   inspector.condition_default.value = field?.condition_default || "";
+  inspector.custom_script_format.value = field?.custom_script_format || "";
+  inspector.custom_script_validate.value = field?.custom_script_validate || "";
+  inspector.custom_script_calculate.value = field?.custom_script_calculate || "";
   renderConditionRows(field);
 
   const groupNames = [...new Set(state.fields.filter((item) => item.type === "radio" && item.group).map((item) => item.group))];

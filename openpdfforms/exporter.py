@@ -233,6 +233,17 @@ def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormFie
                         f'AFSimple_Calculate("{CALC_OPERATIONS[field.calc_operation]}", new Array({names}));'
                     )
 
+            # Designer-authored custom scripts take priority over any preset/generated
+            # script above -- entered once at form-creation time (Inspector's Custom
+            # Script section), not exposed to whoever later fills the form out. Runs
+            # as real Acrobat JavaScript in any viewer that executes PDF JS.
+            if field.custom_script_format:
+                widget.script_format = field.custom_script_format
+            if field.custom_script_validate:
+                widget.script_change = field.custom_script_validate
+            if field.custom_script_calculate:
+                widget.script_calc = field.custom_script_calculate
+
             annot = page.add_widget(widget)
 
             if field.type in (FieldType.signature, FieldType.digital_signature):

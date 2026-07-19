@@ -51,6 +51,9 @@ class FormField(BaseModel):
     calc_fields: list[str] = Field(default_factory=list)
     conditions: list[ConditionRule] = Field(default_factory=list)
     condition_default: str = ""
+    custom_script_format: str = ""
+    custom_script_validate: str = ""
+    custom_script_calculate: str = ""
 
 
 class DocumentInfo(BaseModel):
