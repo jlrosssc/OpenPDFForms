@@ -14,7 +14,9 @@ services:
     image: docker.stirlingpdf.com/stirlingtools/stirling-pdf:latest-fat
     restart: unless-stopped
     environment:
-      DOCKER_ENABLE_SECURITY: "false"
+      DOCKER_ENABLE_SECURITY: "true"
+      SECURITY_ENABLELOGIN: "true"
+      DISABLE_ADDITIONAL_FEATURES: "false"
       INSTALL_BOOK_AND_ADVANCED_HTML_OPS: "false"
       LANGS: en_GB
     volumes:
