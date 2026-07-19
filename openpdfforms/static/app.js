@@ -146,6 +146,9 @@ const saveProjectButton = document.querySelector("#save-project-button");
 const openProjectButton = document.querySelector("#open-project-button");
 const inspector = document.querySelector("#field-form");
 const deleteButton = document.querySelector("#delete-field");
+const scriptTestResult = document.querySelector("#script-test-result");
+const generatedConditionScript = document.querySelector("#generated-condition-script");
+const useGeneratedConditionScriptButton = document.querySelector("#use-generated-condition-script");
 const projectDialog = document.querySelector("#project-dialog");
 const projectList = document.querySelector("#project-list");
 const signatureDialog = document.querySelector("#signature-dialog");
@@ -412,6 +415,23 @@ document.querySelectorAll("[data-signature-tab]").forEach((button) => {
   button.addEventListener("click", () => setSignatureMode(button.dataset.signatureTab));
 });
 
+document.querySelectorAll("[data-script-test]").forEach((button) => {
+  button.addEventListener("click", () => testCustomScript(button.dataset.scriptTest));
+});
+
+useGeneratedConditionScriptButton.addEventListener("click", () => {
+  const field = selectedField();
+  const script = generatedConditionScript.value || "";
+  if (!field || !script.trim()) return;
+  if (!state.inspectorDirty) {
+    pushHistory();
+    state.inspectorDirty = true;
+  }
+  field.custom_script_calculate = script;
+  inspector.custom_script_calculate.value = script;
+  clearScriptTestResult();
+});
+
 signatureText.addEventListener("input", () => {
   signaturePreview.textContent = signatureText.value;
 });
@@ -473,6 +493,7 @@ inspector.addEventListener("input", () => {
     value: values[index] || "",
     output: outputs[index] || "",
   }));
+  refreshGeneratedConditionScript(field);
   renderFields();
 });
 
@@ -1307,6 +1328,7 @@ function syncInspector() {
   inspector.custom_script_format.value = field?.custom_script_format || "";
   inspector.custom_script_validate.value = field?.custom_script_validate || "";
   inspector.custom_script_calculate.value = field?.custom_script_calculate || "";
+  clearScriptTestResult();
   renderConditionRows(field);
 
   const groupNames = [...new Set(state.fields.filter((item) => item.type === "radio" && item.group).map((item) => item.group))];
@@ -1354,6 +1376,7 @@ function renderConditionRows(field) {
     </div>`
     )
     .join("");
+  refreshGeneratedConditionScript(field);
 }
 
 addConditionButton.addEventListener("click", () => {
@@ -1382,6 +1405,192 @@ conditionRows.addEventListener("click", (event) => {
   field.conditions.splice(index, 1);
   renderConditionRows(field);
 });
+
+function escapeJsString(value) {
+  return String(value ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+}
+
+function conditionJsTest(rule) {
+  const source = escapeJsString(rule.source_field);
+  const value = escapeJsString(rule.value);
+  const get = `this.getField("${source}")`;
+  let comparison;
+  if (rule.operator === "checked") {
+    comparison = `${get}.value == "Yes"`;
+  } else if (rule.operator === "not_checked") {
+    comparison = `${get}.value != "Yes"`;
+  } else if (rule.operator === "empty") {
+    comparison = `${get}.value == ""`;
+  } else if (rule.operator === "not_empty") {
+    comparison = `${get}.value != ""`;
+  } else if (rule.operator === "not_equals") {
+    comparison = `${get}.value != "${value}"`;
+  } else if (rule.operator === "contains") {
+    comparison = `${get}.value.indexOf("${value}") !== -1`;
+  } else {
+    comparison = `${get}.value == "${value}"`;
+  }
+  return `(${get} != null && ${comparison})`;
+}
+
+function buildGeneratedConditionScript(field) {
+  if (!field?.conditions?.length) return "";
+  const lines = field.conditions.map((rule, index) => {
+    const keyword = index === 0 ? "if" : "else if";
+    return `${keyword} ${conditionJsTest(rule)} { event.value = "${escapeJsString(rule.output)}"; }`;
+  });
+  lines.push(`else { event.value = "${escapeJsString(field.condition_default)}"; }`);
+  return lines.join("\n");
+}
+
+function refreshGeneratedConditionScript(field) {
+  if (!generatedConditionScript || !useGeneratedConditionScriptButton) return;
+  const script = buildGeneratedConditionScript(field);
+  generatedConditionScript.value = script || "No conditional logic is currently defined for this field.";
+  useGeneratedConditionScriptButton.disabled = !script;
+}
+
+function clearScriptTestResult() {
+  if (!scriptTestResult) return;
+  scriptTestResult.textContent = "";
+  scriptTestResult.classList.remove("is-ok", "is-error");
+}
+
+function showScriptTestResult(message, ok) {
+  if (!scriptTestResult) return;
+  scriptTestResult.textContent = message;
+  scriptTestResult.classList.toggle("is-ok", ok);
+  scriptTestResult.classList.toggle("is-error", !ok);
+}
+
+function acrobatFieldValue(field, valueMap) {
+  if (field.type === "checkbox" || field.type === "radio") {
+    return (valueMap.get(field.id) || field.value || field.default_value) === "Yes" ? "Yes" : "Off";
+  }
+  return valueMap.get(field.id) ?? field.value ?? field.default_value ?? "";
+}
+
+function createAcrobatFieldFacade(field, valueMap) {
+  return {
+    name: field.name,
+    type: field.type,
+    readonly: Boolean(field.read_only),
+    required: Boolean(field.required),
+    display: field.hidden ? "hidden" : "visible",
+    setFocus() {},
+    get value() {
+      return acrobatFieldValue(field, valueMap);
+    },
+    set value(nextValue) {
+      valueMap.set(field.id, String(nextValue ?? ""));
+    },
+  };
+}
+
+function createAcrobatGroupFacade(groupName, groupedFields, valueMap) {
+  return {
+    name: groupName,
+    type: "radio",
+    setFocus() {},
+    get value() {
+      return groupedFields.some((field) => acrobatFieldValue(field, valueMap) === "Yes") ? "Yes" : "Off";
+    },
+    set value(nextValue) {
+      const selectedValue = String(nextValue ?? "");
+      groupedFields.forEach((field, index) => {
+        const shouldSelect = selectedValue === "Yes" ? index === 0 : selectedValue === field.name;
+        valueMap.set(field.id, shouldSelect ? "Yes" : "Off");
+      });
+    },
+  };
+}
+
+function createAcrobatTestContext(selected, initialValue) {
+  const valueMap = new Map(state.fields.map((field) => [field.id, field.value || field.default_value || ""]));
+  const alerts = [];
+  const doc = {
+    getField(name) {
+      const direct = state.fields.find((field) => field.name === name);
+      if (direct) return createAcrobatFieldFacade(direct, valueMap);
+      const grouped = state.fields.filter((field) => field.type === "radio" && field.group === name);
+      if (grouped.length) return createAcrobatGroupFacade(name, grouped, valueMap);
+      return null;
+    },
+    getFieldNames() {
+      return state.fields.map((field) => field.name);
+    },
+  };
+  const event = {
+    value: initialValue,
+    rc: true,
+    target: createAcrobatFieldFacade(selected, valueMap),
+    source: null,
+  };
+  const app = {
+    alert(message) {
+      alerts.push(String(message));
+    },
+  };
+  const util = {
+    printf(format, ...values) {
+      let index = 0;
+      return String(format).replace(/%[sdif]/g, () => String(values[index++] ?? ""));
+    },
+  };
+  return { event, app, util, doc, valueMap, alerts };
+}
+
+function formatChangedFields(valueMap) {
+  return state.fields
+    .filter((field) => (valueMap.get(field.id) ?? "") !== (field.value || field.default_value || ""))
+    .map((field) => `${field.name}: ${valueMap.get(field.id) || ""}`);
+}
+
+function testCustomScript(kind) {
+  const field = selectedField();
+  if (!field) {
+    showScriptTestResult("Select a field before testing a script.", false);
+    return;
+  }
+  const scriptField = {
+    format: inspector.custom_script_format,
+    validate: inspector.custom_script_validate,
+    calculate: inspector.custom_script_calculate,
+  }[kind];
+  const script = scriptField?.value || "";
+  if (!script.trim()) {
+    showScriptTestResult(`No ${kind} script to test.`, false);
+    return;
+  }
+
+  let runner;
+  try {
+    runner = new Function("event", "app", "util", script);
+  } catch (error) {
+    showScriptTestResult(`Syntax error: ${error.message}`, false);
+    return;
+  }
+
+  const initialValue = field.value || field.default_value || "";
+  const context = createAcrobatTestContext(field, initialValue);
+  try {
+    runner.call(context.doc, context.event, context.app, context.util);
+  } catch (error) {
+    showScriptTestResult(`Runtime error: ${error.message}`, false);
+    return;
+  }
+
+  const changedFields = formatChangedFields(context.valueMap);
+  const lines = [
+    "Syntax OK. Simulated run completed.",
+    `event.value: ${context.event.value ?? ""}`,
+    `event.rc: ${context.event.rc === false ? "false" : "true"}`,
+  ];
+  if (context.alerts.length) lines.push(`Alerts: ${context.alerts.join(" | ")}`);
+  if (changedFields.length) lines.push(`Changed fields: ${changedFields.join("; ")}`);
+  lines.push("Final behavior still depends on the PDF viewer's Acrobat JavaScript support.");
+  showScriptTestResult(lines.join("\n"), true);
+}
 
 function numberValue(value, fallback) {
   const parsed = Number.parseFloat(value);

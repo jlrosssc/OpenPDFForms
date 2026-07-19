@@ -9,7 +9,7 @@
 <body>
   <header class="topbar">
     <div>
-      <h1>OpenPDFForms <span class="app-version">v0.3.1</span></h1>
+      <h1>OpenPDFForms <span class="app-version">v0.3.3</span></h1>
       <p>Detect, review, and export fillable PDF forms.</p>
     </div>
     <div class="actions">
@@ -162,13 +162,19 @@
           <div id="condition-rows"></div>
           <button id="add-condition" type="button">+ Add Else If</button>
           <label>Else output<input name="condition_default" placeholder="Used when no rule matches; leave blank for empty"></label>
+          <label>Generated Acrobat JavaScript<textarea id="generated-condition-script" class="code-input generated-script" rows="5" readonly></textarea></label>
+          <button id="use-generated-condition-script" type="button">Use As Calculate Script</button>
         </div>
         <div class="conditions-block">
           <h2>Custom Script (Advanced)</h2>
           <p class="hint">Real Acrobat JavaScript, entered once here at form-creation time -- not exposed to whoever fills the form out later. Runs in any PDF viewer that executes PDF JavaScript (Acrobat/Reader); has no effect in viewers that don't. Overrides Format/Calculation/Conditional Logic above if both are set. See <a href="https://opensource.adobe.com/dc-acrobat-sdk-docs/library/jsapiref/index.html" target="_blank" rel="noopener">Adobe's Acrobat JS API reference</a>.</p>
           <label>Format script<textarea name="custom_script_format" class="code-input" rows="3" placeholder="e.g. event.value = event.value.toUpperCase();"></textarea></label>
+          <button class="script-test-button" type="button" data-script-test="format">Test Format Script</button>
           <label>Validate script<textarea name="custom_script_validate" class="code-input" rows="3" placeholder="e.g. if (event.value.length > 10) event.rc = false;"></textarea></label>
+          <button class="script-test-button" type="button" data-script-test="validate">Test Validate Script</button>
           <label>Calculate script<textarea name="custom_script_calculate" class="code-input" rows="3" placeholder="e.g. event.value = this.getField(&quot;A&quot;).value + this.getField(&quot;B&quot;).value;"></textarea></label>
+          <button class="script-test-button" type="button" data-script-test="calculate">Test Calculate Script</button>
+          <output id="script-test-result" class="script-test-result" aria-live="polite"></output>
         </div>
         <label class="check"><input name="required" type="checkbox"> Required</label>
         <label class="check"><input name="read_only" type="checkbox"> Read-only</label>
