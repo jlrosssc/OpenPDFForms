@@ -413,12 +413,11 @@ def _nearest_right_label(lines: list[dict], x: float, y: float, height: float) -
 
 def _field(page: int, field_type: FieldType, x: float, y: float, width: float, height: float, label: str) -> FormField:
     clean_label = " ".join(label.split())[:60]
-    name_base = re.sub(r"[^a-zA-Z0-9]+", "_", clean_label.lower()).strip("_") or f"{field_type.value}_{uuid.uuid4().hex[:6]}"
     return FormField(
         id=uuid.uuid4().hex,
         page=page,
         type=field_type,
-        name=name_base,
+        name=field_type.value,
         x=round(float(x), 2),
         y=round(float(y), 2),
         width=round(float(width), 2),
@@ -436,11 +435,26 @@ def _dedupe_fields(fields: list[FormField]) -> list[FormField]:
         kept.append(field)
     used: dict[str, int] = {}
     for field in kept:
-        count = used.get(field.name, 0)
-        used[field.name] = count + 1
-        if count:
-            field.name = f"{field.name}_{count + 1}"
+        prefix = _field_name_prefix(field.type)
+        count = used.get(prefix, 0) + 1
+        used[prefix] = count
+        field.name = f"{prefix}_{count}"
     return kept
+
+
+def _field_name_prefix(field_type: FieldType) -> str:
+    return {
+        FieldType.text: "text",
+        FieldType.date: "date",
+        FieldType.checkbox: "checkbox",
+        FieldType.radio: "radio",
+        FieldType.dropdown: "dropdown",
+        FieldType.listbox: "listbox",
+        FieldType.button: "button",
+        FieldType.signature: "signature",
+        FieldType.initials: "initials",
+        FieldType.digital_signature: "esign",
+    }.get(field_type, "field")
 
 
 def _overlap_ratio(a: FormField, b: FormField) -> float:

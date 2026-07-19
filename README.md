@@ -5,7 +5,7 @@ OpenPDFForms is a local web app for turning flat, scanned, or existing AcroForm 
 ## Current Capabilities
 
 - Upload a PDF and render each page in the browser.
-- Auto-detect likely text fields, checkboxes, and radio buttons.
+- Auto-detect likely text fields, checkboxes, and radio buttons. Detected fields use short type-based names such as `text_1` or `checkbox_1`, while nearby descriptive text is kept as the field label and tooltip.
 - Import existing AcroForm fields from PDFs created in tools such as Adobe Acrobat.
 - Add, move, resize, duplicate, align, distribute, or delete fields.
 - Save and reopen editable OpenPDFForms projects.
