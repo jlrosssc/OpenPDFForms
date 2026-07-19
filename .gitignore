@@ -7,3 +7,4 @@ data/renders/
 data/exports/
 data/projects/
 data/tmp/
+deploy/nginx/.htpasswd-forms
