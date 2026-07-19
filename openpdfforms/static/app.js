@@ -17,6 +17,7 @@ const state = {
   mode: "design",
   pendingSignField: null,
   signedFields: new Set(),
+  suppressNextPageClick: false,
 };
 
 const MAX_HISTORY = 50;
@@ -535,6 +536,10 @@ function renderDocument(renderUrls) {
     page.dataset.page = pageIndex;
     page.addEventListener("click", (event) => {
       if (state.mode === "fill") return;
+      if (state.suppressNextPageClick) {
+        state.suppressNextPageClick = false;
+        return;
+      }
       if (state.pendingType) {
         placeField(state.pendingType, page, pageIndex, event);
         return;
@@ -886,6 +891,8 @@ function startResize(event, field, corner) {
 }
 
 function startDrag(event) {
+  event.stopPropagation();
+  state.suppressNextPageClick = true;
   const element = event.currentTarget;
   const field = state.fields.find((item) => item.id === element.dataset.id);
   if (!field) return;
