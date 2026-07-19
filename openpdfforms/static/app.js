@@ -793,16 +793,24 @@ fieldContextMenu.addEventListener("click", (event) => {
   pushHistory();
   if (action === "toggle-required") {
     field.required = !field.required;
+    syncInspector();
+    renderFields();
   } else if (action === "set-group") {
-    const value = prompt("Group name (radio buttons sharing this name act as one choice):", field.group || "");
-    if (value === null) return;
-    field.group = value.trim();
+    // A native prompt() can't show existing group names as suggestions --
+    // jump to the Inspector's own Group field instead, which already has
+    // datalist-based autocomplete over every group in use.
+    syncInspector();
+    renderFields();
+    inspector.group.scrollIntoView({ block: "center" });
+    inspector.group.focus();
   } else if (action === "add-condition") {
     field.conditions = field.conditions || [];
     field.conditions.push({ source_field: "", operator: "equals", value: "", output: "" });
+    syncInspector();
+    renderFields();
+    const rows = conditionRows.querySelectorAll(".condition-row");
+    rows[rows.length - 1]?.scrollIntoView({ block: "center" });
   }
-  syncInspector();
-  renderFields();
 });
 
 function startResize(event, field, corner) {
@@ -1089,6 +1097,8 @@ addConditionButton.addEventListener("click", () => {
   field.conditions = field.conditions || [];
   field.conditions.push({ source_field: "", operator: "equals", value: "", output: "" });
   renderConditionRows(field);
+  const rows = conditionRows.querySelectorAll(".condition-row");
+  rows[rows.length - 1]?.scrollIntoView({ block: "center" });
 });
 
 conditionRows.addEventListener("click", (event) => {
