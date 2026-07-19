@@ -52,12 +52,19 @@ def import_existing_fields(source_pdf: Path) -> list[FormField] | None:
 
         fields: list[FormField] = []
         used_names: dict[str, int] = {}
+        radio_groups: dict[str, str] = {}
 
-        def unique_name(base: str) -> str:
-            base = base or "field"
-            count = used_names.get(base, 0)
-            used_names[base] = count + 1
-            return base if count == 0 else f"{base}_{count + 1}"
+        def next_type_name(field_type: FieldType) -> str:
+            prefix = _field_name_prefix(field_type)
+            count = used_names.get(prefix, 0) + 1
+            used_names[prefix] = count
+            return f"{prefix}_{count}"
+
+        def radio_group_name(original_name: str) -> str:
+            key = original_name or "radio_group"
+            if key not in radio_groups:
+                radio_groups[key] = f"radio_group_{len(radio_groups) + 1}"
+            return radio_groups[key]
 
         for page_index, page in enumerate(doc):
             for widget in page.widgets():
@@ -66,7 +73,7 @@ def import_existing_fields(source_pdf: Path) -> list[FormField] | None:
                 required = bool(widget.field_flags and widget.field_flags & 2)
                 read_only = bool(widget.field_flags and widget.field_flags & 1)
                 no_export = bool(widget.field_flags and widget.field_flags & 4)
-                group = widget.field_name if field_type == FieldType.radio else ""
+                group = radio_group_name(widget.field_name) if field_type == FieldType.radio else ""
                 rect = widget.rect
 
                 fields.append(
@@ -74,7 +81,7 @@ def import_existing_fields(source_pdf: Path) -> list[FormField] | None:
                         id=uuid.uuid4().hex,
                         page=page_index,
                         type=field_type,
-                        name=unique_name(widget.field_name),
+                        name=next_type_name(field_type),
                         x=round(float(rect.x0), 2),
                         y=round(float(rect.y0), 2),
                         width=round(float(rect.width), 2),
