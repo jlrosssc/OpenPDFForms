@@ -226,13 +226,20 @@ button:disabled {
 
 .condition-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
   gap: 6px;
   align-items: center;
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
   margin-bottom: 6px;
+}
+
+.condition-clause {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 42px;
 }
 
 .condition-row select, .condition-row input {
@@ -243,8 +250,12 @@ button:disabled {
   font-size: 12px;
 }
 
+.condition-value, .condition-output {
+  grid-column: 2 / -1;
+}
+
 .condition-row button {
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
   padding: 6px 8px;
 }
 

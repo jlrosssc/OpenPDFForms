@@ -88,6 +88,52 @@ function generateId() {
   });
 }
 
+function fieldNamePrefix(type) {
+  return {
+    text: "text",
+    date: "date",
+    checkbox: "checkbox",
+    radio: "radio",
+    dropdown: "dropdown",
+    listbox: "listbox",
+    button: "button",
+    signature: "signature",
+    initials: "initials",
+    digital_signature: "esign",
+  }[type] || "field";
+}
+
+function isGeneratedFieldName(name) {
+  return /^(text|date|checkbox|radio|dropdown|listbox|button|signature|initials|esign|digital_signature|field)_\d+$/.test(name || "");
+}
+
+function generatedFieldName(type, count) {
+  return `${fieldNamePrefix(type)}_${count}`;
+}
+
+function nextGeneratedFieldName(type) {
+  const prefix = fieldNamePrefix(type);
+  let max = 0;
+  state.fields.forEach((field) => {
+    if (fieldNamePrefix(field.type) !== prefix) return;
+    const match = String(field.name || "").match(new RegExp(`^${prefix}_(\\d+)$`));
+    if (match) max = Math.max(max, Number(match[1]));
+  });
+  return generatedFieldName(type, max + 1);
+}
+
+function normalizeGeneratedFieldNames(fields) {
+  const counts = {};
+  return fields.map((field) => {
+    const prefix = fieldNamePrefix(field.type);
+    counts[prefix] = (counts[prefix] || 0) + 1;
+    if (!field.name || isGeneratedFieldName(field.name)) {
+      field.name = generatedFieldName(field.type, counts[prefix]);
+    }
+    return field;
+  });
+}
+
 const pages = document.querySelector("#pages");
 const pdfInput = document.querySelector("#pdf-input");
 const previewButton = document.querySelector("#preview-button");
@@ -229,6 +275,7 @@ document.addEventListener("keydown", (event) => {
 
 previewButton.addEventListener("click", () => {
   if (!state.documentId) return;
+  recomputeConditions();
   previewDialog.showModal();
   renderInteractivePreview();
 });
@@ -278,6 +325,7 @@ inspector.addEventListener("input", () => {
     state.inspectorDirty = true;
   }
   const data = new FormData(inspector);
+  const previousDefaultValue = field.default_value || "";
   field.name = data.get("name") || field.name;
   field.label = data.get("label") || "";
   field.tooltip = data.get("tooltip") || field.label || "";
@@ -288,6 +336,9 @@ inspector.addEventListener("input", () => {
   field.height = Math.max(1, numberValue(data.get("height"), field.height));
   field.options = (data.get("options") || "").split("\n").map((value) => value.trim()).filter(Boolean);
   field.default_value = data.get("default_value") || "";
+  if (!field.value || field.value === previousDefaultValue) {
+    field.value = field.default_value;
+  }
   field.required = data.get("required") === "on";
   field.read_only = data.get("read_only") === "on";
   field.hidden = data.get("hidden") === "on";
@@ -492,7 +543,7 @@ function loadDocumentInfo(info) {
   state.pageCount = info.page_count;
   state.pageSizes = info.page_sizes;
   state.renderUrls = info.render_urls;
-  state.fields = info.fields;
+  state.fields = normalizeGeneratedFieldNames(info.fields || []);
   state.selectedIds.clear();
   state.activeId = null;
   state.currentPage = 0;
@@ -719,7 +770,7 @@ function renderFillControls({ clearSelector, pageSelector, inputClass, signClass
 }
 
 function fieldMatchesCondition(sourceField, rule) {
-  const value = sourceField ? sourceField.value || "" : "";
+  const value = sourceField ? sourceField.value || sourceField.default_value || "" : "";
   switch (rule.operator) {
     case "checked":
       return value === "Yes";
@@ -1008,7 +1059,7 @@ function placeField(type, pageElement, pageIndex, event) {
     id,
     page: pageIndex,
     type,
-    name: `${type}_${state.fields.length + 1}`,
+    name: nextGeneratedFieldName(type),
     x,
     y,
     width,
@@ -1142,10 +1193,11 @@ function renderConditionRows(field) {
   const otherFields = state.fields.filter((item) => item.id !== field?.id);
   conditionRows.innerHTML = conditions
     .map(
-      (rule) => `
+      (rule, index) => `
     <div class="condition-row">
-      <select name="condition_source">
-        <option value="">If field...</option>
+      <span class="condition-clause">${index === 0 ? "If" : "Else if"}</span>
+      <select name="condition_source" aria-label="Condition source field">
+        <option value="">Choose field...</option>
         ${otherFields
           .map(
             (item) =>
@@ -1153,13 +1205,15 @@ function renderConditionRows(field) {
           )
           .join("")}
       </select>
-      <select name="condition_operator">
+      <select name="condition_operator" aria-label="Condition operator">
         ${CONDITION_OPERATORS.map(
           (op) => `<option value="${op.value}"${op.value === rule.operator ? " selected" : ""}>${op.label}</option>`
         ).join("")}
       </select>
-      <input name="condition_value" value="${escapeHtml(rule.value)}" placeholder="Value">
-      <input name="condition_output" value="${escapeHtml(rule.output)}" placeholder="Output">
+      <span class="condition-clause">Value</span>
+      <input class="condition-value" name="condition_value" value="${escapeHtml(rule.value)}" placeholder="Value" aria-label="Condition value">
+      <span class="condition-clause">Then</span>
+      <input class="condition-output" name="condition_output" value="${escapeHtml(rule.output)}" placeholder="Output" aria-label="Then output">
       <button type="button" class="remove-condition">Remove</button>
     </div>`
     )

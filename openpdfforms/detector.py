@@ -109,7 +109,7 @@ def detect_fields(source_pdf: Path, document_id: str) -> list[FormField]:
         for page_index, page in enumerate(doc):
             page_fields = _detect_page_fields(page, page_index)
             fields.extend(apply_field_hooks(page_fields, HookContext(document_id=document_id, source_pdf=source_pdf, page_index=page_index)))
-    return fields
+    return _renumber_generated_field_names(fields)
 
 
 def _detect_page_fields(page: fitz.Page, page_index: int) -> list[FormField]:
@@ -447,6 +447,16 @@ def _dedupe_fields(fields: list[FormField]) -> list[FormField]:
         used[prefix] = count
         field.name = f"{prefix}_{count}"
     return kept
+
+
+def _renumber_generated_field_names(fields: list[FormField]) -> list[FormField]:
+    used: dict[str, int] = {}
+    for field in fields:
+        prefix = _field_name_prefix(field.type)
+        count = used.get(prefix, 0) + 1
+        used[prefix] = count
+        field.name = f"{prefix}_{count}"
+    return fields
 
 
 def _field_name_prefix(field_type: FieldType) -> str:

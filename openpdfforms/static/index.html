@@ -9,7 +9,7 @@
 <body>
   <header class="topbar">
     <div>
-      <h1>OpenPDFForms <span class="app-version">v0.2.2</span></h1>
+      <h1>OpenPDFForms <span class="app-version">v0.2.3</span></h1>
       <p>Detect, review, and export fillable PDF forms.</p>
     </div>
     <div class="actions">
@@ -156,10 +156,10 @@
         <label>Calculation fields<input name="calc_fields" placeholder="Comma-separated field names"></label>
         <div class="conditions-block">
           <h2>Conditional Logic</h2>
-          <p class="hint">Build "if/then" rules visually -- no code to write. This field's value is computed from other fields; rules are checked in order and the first match wins.</p>
+          <p class="hint">Build if / then / else logic visually. Rules are checked in order; the first match wins. Use another computed field as a source field for nested logic.</p>
           <div id="condition-rows"></div>
-          <button id="add-condition" type="button">+ Add Condition</button>
-          <label>Default output (if no rule matches)<input name="condition_default" placeholder="Leave blank for empty"></label>
+          <button id="add-condition" type="button">+ Add Else If</button>
+          <label>Else output<input name="condition_default" placeholder="Used when no rule matches; leave blank for empty"></label>
         </div>
         <div class="conditions-block">
           <h2>Custom Script (Advanced)</h2>
