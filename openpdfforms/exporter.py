@@ -117,6 +117,8 @@ def _date_auto_fill_script(field: FormField) -> str:
 
 
 def _button_action_script(field: FormField, fields: list[FormField]) -> str:
+    if field.button_script:
+        return field.button_script
     if field.button_action == "reset_page":
         names = [
             _escape_js_string(item.name)

@@ -45,6 +45,7 @@ class FormField(BaseModel):
     no_export: bool = False
     default_value: str = ""
     button_action: str = ""
+    button_script: str = ""
     text_alignment: str = "left"
     border_style: str = "solid"
     tab_order: int = 0

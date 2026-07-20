@@ -9,7 +9,7 @@
 <body>
   <header class="topbar">
     <div>
-      <h1>OpenPDFForms <span class="app-version">v0.3.16</span></h1>
+      <h1>OpenPDFForms <span class="app-version">v0.3.17</span></h1>
       <p>Detect, review, and export fillable PDF forms.</p>
     </div>
     <div class="actions">
@@ -106,8 +106,14 @@
             <option value="print">Print</option>
             <option value="submit">Submit form</option>
             <option value="reset_page">Reset current page</option>
+            <option value="custom">Custom JavaScript</option>
           </select>
         </label>
+        <div id="button-script-block" class="conditions-block" hidden>
+          <h2>Button Action</h2>
+          <label>Button script <span class="label-hint">runs when the PDF button is clicked</span><textarea name="button_script" class="code-input" rows="4" placeholder="e.g. this.resetForm();"></textarea></label>
+          <button class="script-test-button" type="button" data-script-test="action">Test Button Script</button>
+        </div>
         <label>Tooltip<input name="tooltip" placeholder="Help text shown by PDF viewers"></label>
         <label>Group (radio buttons with the same group act as one choice)
           <input name="group" list="group-suggestions">

@@ -152,6 +152,7 @@ const openProjectButton = document.querySelector("#open-project-button");
 const inspector = document.querySelector("#field-form");
 const deleteButton = document.querySelector("#delete-field");
 const scriptTestResult = document.querySelector("#script-test-result");
+const buttonScriptBlock = document.querySelector("#button-script-block");
 const generatedConditionScript = document.querySelector("#generated-condition-script");
 const useGeneratedConditionScriptButton = document.querySelector("#use-generated-condition-script");
 const projectDialog = document.querySelector("#project-dialog");
@@ -483,6 +484,7 @@ inspector.addEventListener("input", () => {
   field.options = (data.get("options") || "").split("\n").map((value) => value.trim()).filter(Boolean);
   field.default_value = data.get("default_value") || "";
   field.button_action = data.get("button_action") || "";
+  field.button_script = data.get("button_script") || "";
   if (!field.value || field.value === previousDefaultValue) {
     field.value = field.default_value;
   }
@@ -1481,6 +1483,7 @@ function baseField(type, pageIndex, geometry) {
     signature_data_url: "",
     multi_select: false,
     button_action: "",
+    button_script: "",
     date_auto_fill: false,
     date_format: "mm/dd/yyyy",
   };
@@ -1594,6 +1597,10 @@ function syncInspector() {
   inspector.options.value = field?.options?.join("\n") || "";
   inspector.default_value.value = field?.default_value || "";
   inspector.button_action.value = field?.button_action || "";
+  inspector.button_script.value = field?.button_script || "";
+  if (buttonScriptBlock) {
+    buttonScriptBlock.hidden = field?.type !== "button";
+  }
   inspector.tooltip.value = field?.tooltip || "";
   inspector.required.checked = Boolean(field?.required);
   inspector.read_only.checked = Boolean(field?.read_only);
@@ -1819,6 +1826,20 @@ function createAcrobatTestContext(selected, initialValue) {
     getFieldNames() {
       return state.fields.map((field) => field.name);
     },
+    resetForm(names) {
+      const targetNames = Array.isArray(names) ? new Set(names) : null;
+      state.fields.forEach((field) => {
+        if (field.read_only || field.type === "signature" || field.type === "initials" || field.type === "digital_signature") return;
+        if (targetNames && !targetNames.has(field.name)) return;
+        valueMap.set(field.id, field.type === "checkbox" || field.type === "radio" ? "Off" : "");
+      });
+    },
+    print() {
+      alerts.push("Print requested.");
+    },
+    submitForm() {
+      alerts.push("Submit requested.");
+    },
   };
   const event = {
     value: initialValue,
@@ -1856,6 +1877,7 @@ function testCustomScript(kind) {
     format: inspector.custom_script_format,
     validate: inspector.custom_script_validate,
     calculate: inspector.custom_script_calculate,
+    action: inspector.button_script,
   }[kind];
   const script = scriptField?.value || "";
   if (!script.trim()) {
