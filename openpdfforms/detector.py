@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -114,6 +117,8 @@ def detect_fields(source_pdf: Path, document_id: str) -> list[FormField]:
 
 def _detect_page_fields(page: fitz.Page, page_index: int) -> list[FormField]:
     text_lines = _extract_text_lines(page)
+    if _needs_ocr_text(text_lines):
+        text_lines.extend(_extract_ocr_text_lines(page))
     if _looks_like_instruction_page(text_lines):
         return []
     vector_fields = _detect_vector_form_fields(page, page_index, text_lines)
@@ -140,6 +145,70 @@ def _extract_text_lines(page: fitz.Page) -> list[dict]:
     return lines
 
 
+def _needs_ocr_text(lines: list[dict]) -> bool:
+    text = " ".join(line["text"] for line in lines)
+    return len(lines) < 4 or len(text.strip()) < 80
+
+
+def _extract_ocr_text_lines(page: fitz.Page, zoom: float = 2.0) -> list[dict]:
+    if not shutil.which("tesseract"):
+        return []
+
+    matrix = fitz.Matrix(zoom, zoom)
+    pix = page.get_pixmap(matrix=matrix, alpha=False)
+    with tempfile.TemporaryDirectory(prefix="openpdfforms-ocr-") as tmp:
+        image_path = Path(tmp) / "page.png"
+        pix.save(image_path)
+        result = subprocess.run(
+            ["tesseract", str(image_path), "stdout", "tsv", "--psm", "6"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    if result.returncode != 0 or not result.stdout.strip():
+        return []
+
+    words: list[dict] = []
+    for row in result.stdout.splitlines()[1:]:
+        columns = row.split("\t")
+        if len(columns) < 12:
+            continue
+        try:
+            conf = float(columns[10])
+            text = columns[11].strip()
+            if conf < 35 or not text:
+                continue
+            left, top, width, height = (float(columns[index]) for index in (6, 7, 8, 9))
+            block_num, par_num, line_num = columns[2], columns[3], columns[4]
+        except (TypeError, ValueError):
+            continue
+        words.append(
+            {
+                "key": (block_num, par_num, line_num),
+                "text": text,
+                "bbox": (left / zoom, top / zoom, (left + width) / zoom, (top + height) / zoom),
+            }
+        )
+
+    grouped: dict[tuple[str, str, str], list[dict]] = {}
+    for word in words:
+        grouped.setdefault(word["key"], []).append(word)
+
+    lines: list[dict] = []
+    for group in grouped.values():
+        group.sort(key=lambda item: item["bbox"][0])
+        text = " ".join(item["text"] for item in group).strip()
+        if not text:
+            continue
+        x0 = min(item["bbox"][0] for item in group)
+        y0 = min(item["bbox"][1] for item in group)
+        x1 = max(item["bbox"][2] for item in group)
+        y1 = max(item["bbox"][3] for item in group)
+        lines.append({"text": text, "bbox": (x0, y0, x1, y1), "source": "ocr"})
+    return lines
+
+
 def _detect_text_fields_from_text(page_index: int, lines: list[dict], page_width: float) -> list[FormField]:
     fields: list[FormField] = []
     for line in lines:
@@ -150,14 +219,16 @@ def _detect_text_fields_from_text(page_index: int, lines: list[dict], page_width
                 width = max(70.0, min(260.0, match.end() - match.start()) * 6.0)
                 field_x = min(page_width - width - 24.0, x0 + match.start() * 5.2)
                 label = text[: match.start()].strip(" :_")
-                fields.append(_field(page_index, FieldType.text, field_x, y0 - 2, width, max(16.0, y1 - y0 + 4), label))
+                fields.append(_field(page_index, FieldType.text, field_x, y0 - 2, width, max(16.0, y1 - y0 + 4), label, confidence=0.8, source="underscore_text"))
             continue
         if text.endswith(":"):
             if not _is_likely_form_label(text):
                 continue
             available = page_width - x1 - 36.0
             if available >= 90.0 and len(text) <= 55:
-                fields.append(_field(page_index, FieldType.text, x1 + 8.0, y0 - 2.0, min(available, 260.0), max(16.0, y1 - y0 + 4), text.rstrip(":")))
+                source = "ocr_colon_label" if line.get("source") == "ocr" else "colon_label"
+                confidence = 0.72 if line.get("source") == "ocr" else 0.78
+                fields.append(_field(page_index, FieldType.text, x1 + 8.0, y0 - 2.0, min(available, 260.0), max(16.0, y1 - y0 + 4), text.rstrip(":"), confidence=confidence, source=source))
     return fields
 
 
@@ -193,7 +264,19 @@ def _detect_vector_form_fields(page: fitz.Page, page_index: int, lines: list[dic
             continue
         if text.startswith("$"):
             field_left = max(field_left, x0 + 10.0)
-        fields.append(_field(page_index, FieldType.text, field_left, field_top, right - field_left - 4.0, field_bottom - field_top, text.rstrip(":")))
+        fields.append(
+            _field(
+                page_index,
+                FieldType.text,
+                field_left,
+                field_top,
+                right - field_left - 4.0,
+                field_bottom - field_top,
+                text.rstrip(":"),
+                confidence=0.85,
+                source="table_label_cell",
+            )
+        )
 
     for rect in rects:
         x0, y0, x1, y1 = rect
@@ -205,7 +288,9 @@ def _detect_vector_form_fields(page: fitz.Page, page_index: int, lines: list[dic
         left_label = _nearest_left_label(lines, x0, y0, height)
         label = right_label if _is_likely_checkbox_label(right_label) else left_label
         if label and _is_likely_checkbox_label(label):
-            fields.append(_field(page_index, FieldType.checkbox, x0, y0, width, height, label))
+            fields.append(_field(page_index, FieldType.checkbox, x0, y0, width, height, label, confidence=0.88, source="vector_box"))
+
+    fields.extend(_detect_empty_table_cells(page_index, horizontal, vertical, lines))
 
     return fields
 
@@ -285,6 +370,136 @@ def _find_cell_for_label(
     return left, top, right, bottom
 
 
+def _detect_empty_table_cells(
+    page_index: int,
+    horizontal: list[tuple[float, float, float]],
+    vertical: list[tuple[float, float, float]],
+    lines: list[dict],
+) -> list[FormField]:
+    x_values = sorted({x for x, _y0, _y1 in vertical})
+    y_values = sorted({y for y, _x0, _x1 in horizontal})
+    fields: list[FormField] = []
+
+    for row_index in range(len(y_values) - 1):
+        top, bottom = y_values[row_index], y_values[row_index + 1]
+        height = bottom - top
+        if not (11 <= height <= 70):
+            continue
+        for col_index in range(len(x_values) - 1):
+            left, right = x_values[col_index], x_values[col_index + 1]
+            width = right - left
+            if not (28 <= width <= 360):
+                continue
+            if not _cell_is_bounded(left, right, top, bottom, horizontal, vertical):
+                continue
+            if _text_lines_in_rect(lines, left + 2, top + 1, right - 2, bottom - 1):
+                continue
+
+            label = _label_for_empty_cell(lines, x_values, y_values, row_index, col_index)
+            if not label or not _is_likely_form_label(label):
+                continue
+            if _label_already_has_nearby_field(fields, page_index, label, left, top):
+                continue
+
+            field_height = max(16.0, min(28.0, height - 4.0))
+            field_y = top + max(2.0, (height - field_height) / 2)
+            field = _field(
+                page_index,
+                FieldType.text,
+                left + 3.0,
+                field_y,
+                width - 6.0,
+                field_height,
+                label,
+                confidence=0.82,
+                source="empty_table_cell",
+            )
+            field.multiline = height >= 34 and width >= 100
+            fields.append(field)
+    return fields
+
+
+def _cell_is_bounded(
+    left: float,
+    right: float,
+    top: float,
+    bottom: float,
+    horizontal: list[tuple[float, float, float]],
+    vertical: list[tuple[float, float, float]],
+) -> bool:
+    tolerance = 1.5
+    has_top = any(abs(y - top) <= tolerance and x0 <= left + tolerance and x1 >= right - tolerance for y, x0, x1 in horizontal)
+    has_bottom = any(abs(y - bottom) <= tolerance and x0 <= left + tolerance and x1 >= right - tolerance for y, x0, x1 in horizontal)
+    has_left = any(abs(x - left) <= tolerance and y0 <= top + tolerance and y1 >= bottom - tolerance for x, y0, y1 in vertical)
+    has_right = any(abs(x - right) <= tolerance and y0 <= top + tolerance and y1 >= bottom - tolerance for x, y0, y1 in vertical)
+    return has_top and has_bottom and has_left and has_right
+
+
+def _text_lines_in_rect(lines: list[dict], left: float, top: float, right: float, bottom: float) -> list[dict]:
+    matches = []
+    for line in lines:
+        x0, y0, x1, y1 = line["bbox"]
+        overlap_w = max(0.0, min(right, x1) - max(left, x0))
+        overlap_h = max(0.0, min(bottom, y1) - max(top, y0))
+        if overlap_w * overlap_h > 4:
+            matches.append(line)
+    return matches
+
+
+def _label_for_empty_cell(
+    lines: list[dict],
+    x_values: list[float],
+    y_values: list[float],
+    row_index: int,
+    col_index: int,
+) -> str:
+    left, right = x_values[col_index], x_values[col_index + 1]
+    top, bottom = y_values[row_index], y_values[row_index + 1]
+    row_height = bottom - top
+    same_row_candidates = []
+    for line in lines:
+        text = line["text"].strip().rstrip(":")
+        x0, y0, x1, y1 = line["bbox"]
+        line_center_y = (y0 + y1) / 2
+        if x1 <= left + 2 and abs(line_center_y - (top + row_height / 2)) <= max(12, row_height * 0.55):
+            same_row_candidates.append((left - x1, text))
+    if same_row_candidates:
+        return min(same_row_candidates)[1]
+
+    above_candidates = []
+    for line in lines:
+        text = line["text"].strip().rstrip(":")
+        x0, y0, x1, y1 = line["bbox"]
+        overlap = max(0.0, min(right, x1) - max(left, x0))
+        if y1 <= top + 3 and top - y1 <= 28 and overlap >= min(right - left, x1 - x0) * 0.25:
+            above_candidates.append((top - y1, text))
+    if above_candidates:
+        return min(above_candidates)[1]
+
+    if row_index > 0:
+        above_top, above_bottom = y_values[row_index - 1], y_values[row_index]
+        texts = [
+            line["text"].strip().rstrip(":")
+            for line in _text_lines_in_rect(lines, left, above_top, right, above_bottom)
+            if line["text"].strip()
+        ]
+        if texts:
+            return " ".join(texts)
+    return ""
+
+
+def _label_already_has_nearby_field(fields: list[FormField], page_index: int, label: str, x: float, y: float) -> bool:
+    normalized = " ".join(label.lower().split())
+    for field in fields:
+        if field.page != page_index:
+            continue
+        if " ".join(field.label.lower().split()) != normalized:
+            continue
+        if abs(field.x - x) <= 8 and abs(field.y - y) <= 20:
+            return True
+    return False
+
+
 def _is_likely_form_label(text: str) -> bool:
     normalized = " ".join(text.strip().split())
     if not normalized or len(normalized) > 90:
@@ -309,13 +524,51 @@ def _is_likely_form_label(text: str) -> bool:
         return False
     if lower in {"$", "for", "created"}:
         return False
+    word_count = len(re.findall(r"[a-z0-9]+", lower))
+    has_letters = bool(re.search(r"[a-z]", lower))
+    if normalized.endswith(":") and has_letters:
+        return True
     signal_words = (
         "name",
+        "first",
+        "middle",
+        "last",
         "address",
         "city",
         "state",
         "country",
         "zip",
+        "postal",
+        "email",
+        "e-mail",
+        "phone",
+        "cell",
+        "mobile",
+        "telephone",
+        "date",
+        "birth",
+        "ssn",
+        "social security",
+        "driver",
+        "license",
+        "position",
+        "job",
+        "employment",
+        "employer",
+        "company",
+        "supervisor",
+        "reference",
+        "education",
+        "school",
+        "college",
+        "degree",
+        "major",
+        "salary",
+        "wage",
+        "available",
+        "authorized",
+        "citizen",
+        "signature",
         "tin",
         "account",
         "compensation",
@@ -333,17 +586,44 @@ def _is_likely_form_label(text: str) -> bool:
         "ttoc",
         "room",
         "suite",
-        "telephone",
         "apt.",
     )
-    return normalized.endswith(":") or any(word in lower for word in signal_words) or bool(re.match(r"^\d+[a-z]?\s+", lower))
+    if any(word in lower for word in signal_words) or bool(re.match(r"^\d+[a-z]?\s+", lower)):
+        return True
+    if not has_letters or word_count > 10:
+        return False
+    if lower.endswith((".", "!", "?")) and word_count > 5:
+        return False
+    return True
 
 
 def _is_likely_checkbox_label(text: str) -> bool:
     lower = " ".join(text.lower().split())
     if len(lower) > 90:
         return False
-    return any(term in lower for term in ("void", "corrected", "direct sales", "consumer products", "checked", "$5,000", "2nd tin"))
+    return any(
+        term in lower
+        for term in (
+            "void",
+            "corrected",
+            "direct sales",
+            "consumer products",
+            "checked",
+            "$5,000",
+            "2nd tin",
+            "yes",
+            "no",
+            "authorized",
+            "eligible",
+            "citizen",
+            "previously employed",
+            "convicted",
+            "felony",
+            "full time",
+            "part time",
+            "temporary",
+        )
+    )
 
 
 def _looks_like_instruction_page(lines: list[dict]) -> bool:
@@ -370,13 +650,18 @@ def _detect_shape_fields(page: fitz.Page, page_index: int, lines: list[dict]) ->
         x, y, w, h = cv2.boundingRect(contour)
         pdf_x, pdf_y, pdf_w, pdf_h = x * scale_x, y * scale_y, w * scale_x, h * scale_y
         if 7 <= pdf_w <= 24 and 7 <= pdf_h <= 24 and 0.65 <= pdf_w / max(pdf_h, 1) <= 1.45:
-            if _looks_like_box(contour):
-                label = _nearest_right_label(lines, pdf_x, pdf_y, pdf_h)
-                if label:
-                    fields.append(_field(page_index, FieldType.checkbox, pdf_x, pdf_y, max(pdf_w, 10), max(pdf_h, 10), label))
+            field_type = FieldType.radio if _looks_like_circle(contour) else FieldType.checkbox if _looks_like_box(contour) else None
+            if field_type:
+                label = (
+                    _nearest_right_label(lines, pdf_x, pdf_y, pdf_h)
+                    or _nearest_left_label(lines, pdf_x, pdf_y, pdf_h)
+                    or _nearest_above_label(lines, pdf_x, pdf_y, pdf_w)
+                )
+                if label and _is_likely_form_label(label):
+                    fields.append(_field(page_index, field_type, pdf_x, pdf_y, max(pdf_w, 10), max(pdf_h, 10), label))
         elif pdf_w >= 55 and 6 <= pdf_h <= 20:
             if _looks_like_horizontal_line(contour):
-                label = _nearest_left_label(lines, pdf_x, pdf_y, pdf_h)
+                label = _nearest_left_label(lines, pdf_x, pdf_y, pdf_h) or _nearest_above_label(lines, pdf_x, pdf_y, pdf_w)
                 if label and _is_likely_form_label(label):
                     fields.append(_field(page_index, FieldType.text, pdf_x, pdf_y - 9, min(pdf_w, 320), 18, label))
     return fields
@@ -394,6 +679,18 @@ def _looks_like_box(contour) -> bool:
     perimeter = cv2.arcLength(contour, True)
     approx = cv2.approxPolyDP(contour, 0.04 * perimeter, True)
     return 4 <= len(approx) <= 8 and contour_area / rect_area >= 0.25
+
+
+def _looks_like_circle(contour) -> bool:
+    x, y, w, h = cv2.boundingRect(contour)
+    if not (0.75 <= w / max(h, 1) <= 1.35):
+        return False
+    area = max(cv2.contourArea(contour), 1)
+    perimeter = cv2.arcLength(contour, True)
+    if perimeter <= 0:
+        return False
+    circularity = 4 * np.pi * area / (perimeter * perimeter)
+    return circularity >= 0.55
 
 
 def _nearest_left_label(lines: list[dict], x: float, y: float, height: float) -> str:
@@ -418,8 +715,44 @@ def _nearest_right_label(lines: list[dict], x: float, y: float, height: float) -
     return min(candidates, default=(0, ""))[1]
 
 
-def _field(page: int, field_type: FieldType, x: float, y: float, width: float, height: float, label: str) -> FormField:
+def _nearest_above_label(lines: list[dict], x: float, y: float, width: float) -> str:
+    candidates = []
+    center_x = x + width / 2
+    for line in lines:
+        text = line["text"].rstrip(":")
+        x0, y0, x1, y1 = line["bbox"]
+        overlap = max(0.0, min(x + width, x1) - max(x, x0))
+        horizontally_close = overlap >= min(width, x1 - x0) * 0.35 or abs(((x0 + x1) / 2) - center_x) <= max(width * 0.55, 35)
+        if y1 <= y + 4 and y - y1 <= 24 and horizontally_close:
+            candidates.append((y - y1, text))
+    return min(candidates, default=(0, ""))[1]
+
+
+def _infer_text_field_type(label: str) -> FieldType:
+    lower = " ".join(label.lower().split())
+    if any(term in lower for term in ("signature", "sign here", "applicant signature")):
+        return FieldType.signature
+    if lower in {"date", "today's date", "todays date"} or any(
+        term in lower for term in ("date of birth", "birth date", "start date", "available date", "application date")
+    ):
+        return FieldType.date
+    return FieldType.text
+
+
+def _field(
+    page: int,
+    field_type: FieldType,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    label: str,
+    confidence: float = 0.0,
+    source: str = "",
+) -> FormField:
     clean_label = " ".join(label.split())[:60]
+    if field_type == FieldType.text:
+        field_type = _infer_text_field_type(clean_label)
     return FormField(
         id=uuid.uuid4().hex,
         page=page,
@@ -431,6 +764,8 @@ def _field(page: int, field_type: FieldType, x: float, y: float, width: float, h
         height=round(float(height), 2),
         label=clean_label,
         tooltip=clean_label,
+        confidence=confidence,
+        detection_source=source,
     )
 
 
@@ -440,13 +775,8 @@ def _dedupe_fields(fields: list[FormField]) -> list[FormField]:
         if any(field.page == other.page and _overlap_ratio(field, other) > 0.55 for other in kept):
             continue
         kept.append(field)
-    used: dict[str, int] = {}
-    for field in kept:
-        prefix = _field_name_prefix(field.type)
-        count = used.get(prefix, 0) + 1
-        used[prefix] = count
-        field.name = f"{prefix}_{count}"
-    return kept
+    _assign_radio_groups(kept)
+    return _renumber_generated_field_names(kept)
 
 
 def _renumber_generated_field_names(fields: list[FormField]) -> list[FormField]:
@@ -457,6 +787,29 @@ def _renumber_generated_field_names(fields: list[FormField]) -> list[FormField]:
         used[prefix] = count
         field.name = f"{prefix}_{count}"
     return fields
+
+
+def _assign_radio_groups(fields: list[FormField]) -> None:
+    radio_fields = [field for field in fields if field.type == FieldType.radio]
+    groups: list[list[FormField]] = []
+    for field in sorted(radio_fields, key=lambda item: (item.page, item.y, item.x)):
+        for group in groups:
+            first = group[0]
+            same_page = first.page == field.page
+            same_row = abs((first.y + first.height / 2) - (field.y + field.height / 2)) <= 14
+            nearby = abs(first.x - field.x) <= 220 or abs(first.y - field.y) <= 34
+            if same_page and same_row and nearby:
+                group.append(field)
+                break
+        else:
+            groups.append([field])
+
+    for index, group in enumerate(groups, start=1):
+        if len(group) < 2:
+            continue
+        group_name = f"radio_group_{index}"
+        for field in group:
+            field.group = group_name
 
 
 def _field_name_prefix(field_type: FieldType) -> str:

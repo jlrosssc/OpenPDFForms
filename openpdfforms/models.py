@@ -66,6 +66,8 @@ class FormField(BaseModel):
     custom_script_validate: str = ""
     custom_script_calculate: str = ""
     multi_select: bool = False
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    detection_source: str = ""
 
 
 class DocumentInfo(BaseModel):
