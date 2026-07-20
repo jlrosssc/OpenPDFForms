@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenPDFForms Manual</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --line: #d8dde6;
+    --text: #18202f;
+    --muted: #637084;
+    --accent: #1769aa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  a { color: var(--accent); }
+  header.top {
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    padding: 18px 24px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  header.top h1 { margin: 0; font-size: 20px; }
+  header.top a.back { font-size: 13px; text-decoration: none; }
+  .layout {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 28px 24px 80px;
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 40px;
+    align-items: start;
+  }
+  nav.toc {
+    position: sticky;
+    top: 24px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 13px;
+  }
+  nav.toc h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; }
+  nav.toc ol { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+  nav.toc a { text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  main { min-width: 0; }
+  section.topic {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 22px 26px;
+    margin-bottom: 18px;
+  }
+  section.topic h2 { margin-top: 0; font-size: 18px; }
+  section.topic h3 { font-size: 15px; margin: 20px 0 6px; }
+  section.topic h3:first-of-type { margin-top: 0; }
+  section.topic p { margin: 8px 0; }
+  section.topic ul, section.topic ol { margin: 8px 0; padding-left: 22px; }
+  section.topic li { margin: 4px 0; }
+  code, .key {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    background: rgba(23, 105, 170, 0.1);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 12px;
+  }
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: rgba(23, 105, 170, 0.06);
+    border-radius: 0 6px 6px 0;
+    padding: 10px 14px;
+    margin: 12px 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>OpenPDFForms Manual</h1>
+  <a class="back" href=".">&larr; Back to the app</a>
+</header>
+
+<div class="layout">
+  <nav class="toc" aria-label="Table of contents">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#capabilities">Capabilities</a></li>
+      <li><a href="#field-types">Field types</a></li>
+      <li><a href="#field-properties">Field properties</a></li>
+      <li><a href="#create-form">Create a fillable form</a></li>
+      <li><a href="#blank-form">Create a form from scratch</a></li>
+      <li><a href="#place-fields">Add and place fields</a></li>
+      <li><a href="#edit-base">Edit the base document</a></li>
+      <li><a href="#fill-sign">Fill and sign</a></li>
+      <li><a href="#trust">E Sign trust</a></li>
+      <li><a href="#scripts">Custom scripts</a></li>
+      <li><a href="#hooks">Python hooks</a></li>
+      <li><a href="#access-control">Access control</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <section class="topic" id="capabilities">
+      <h2>Capabilities</h2>
+      <ul>
+        <li>Upload a PDF, image, or common office document; non-PDF uploads are converted to PDF before rendering and field detection.</li>
+        <li>Create a new blank PDF form from scratch using Letter, Legal, or A4 pages in portrait or landscape orientation.</li>
+        <li>Auto-detect likely text fields, checkboxes, and radio buttons.</li>
+        <li>Import existing AcroForm fields from PDFs created in tools such as Adobe Acrobat.</li>
+        <li>Add, move, resize, duplicate, align, distribute, or delete fields.</li>
+        <li>Add static base-document edits such as printed text, whiteout rectangles, and images.</li>
+        <li>Save and reopen editable OpenPDFForms projects.</li>
+        <li>Export a fillable AcroForm PDF.</li>
+        <li>Preview the PDF with current field values before export/signing.</li>
+        <li>Fill forms in the browser and download the current signed/filled copy.</li>
+        <li>Create typed or drawn signature appearances for Mock Sign fields.</li>
+        <li>Apply E Sign fields with a cryptographic PDF signature backed by a local OpenPDFForms certificate authority.</li>
+        <li>Download the local trust certificate so signatures can validate as trusted on managed machines.</li>
+        <li>Manage app users with per-user idle timeout, remember duration, and browser-close logout settings.</li>
+        <li>Customize detection and field naming with Python hooks.</li>
+      </ul>
+    </section>
+
+    <section class="topic" id="field-types">
+      <h2>Field types</h2>
+      <ul>
+        <li>Text</li>
+        <li>Date</li>
+        <li>Checkbox</li>
+        <li>Radio button groups</li>
+        <li>Dropdown</li>
+        <li>List box, including multi-select list boxes</li>
+        <li>Button placeholder fields</li>
+        <li>Mock Sign</li>
+        <li>Initials</li>
+        <li>E Sign / digital signature</li>
+        <li>Static Text</li>
+        <li>Whiteout</li>
+        <li>Image</li>
+      </ul>
+    </section>
+
+    <section class="topic" id="field-properties">
+      <h2>Field properties</h2>
+      <p>The Inspector supports common Acrobat-style field properties:</p>
+      <ul>
+        <li>Name, label, tooltip, type, page position, size, font size, max length</li>
+        <li>Required, read-only, hidden, print/no-print, and do-not-export flags</li>
+        <li>Default value</li>
+        <li>Auto-fit text for fields where entered text may be longer than the visible box</li>
+        <li>Dropdown/list options</li>
+        <li>Radio group name</li>
+        <li>Multiline and comb text fields</li>
+        <li>Multi-select list box behavior</li>
+        <li>Text alignment</li>
+        <li>Border style, border color, and background color</li>
+        <li>Tab order</li>
+        <li>Format presets: number, integer, percent, currency, date, ZIP code, and phone</li>
+        <li>Date/time auto-fill with selectable local date and date/time display formats</li>
+        <li>Calculations: sum, average, product, min, and max</li>
+        <li>Visual if / then / else conditional logic rules, with generated Acrobat JavaScript visible for review or reuse</li>
+        <li>Button actions for clear form, print, submit form, reset current page, or custom Acrobat JavaScript</li>
+        <li>Advanced custom Acrobat JavaScript for format, validation, and calculation scripts</li>
+        <li>Built-in script test buttons for custom format, validation, calculation, and button-action scripts</li>
+      </ul>
+    </section>
+
+    <section class="topic" id="create-form">
+      <h2>Create a fillable form</h2>
+      <ol>
+        <li>Open OpenPDFForms and upload a PDF, image, Word/LibreOffice document, spreadsheet, presentation, text file, or CSV.</li>
+        <li>Review the detected fields. Move, resize, rename, or delete anything that was detected incorrectly.</li>
+        <li>Add missing fields from the Add Field panel.</li>
+        <li>Select each field and use the Inspector to set its name, label, tooltip, required status, formatting, calculations, conditional logic, and visual style.</li>
+        <li>Use Preview to check the appearance with current field values.</li>
+        <li>Save Project if you want to keep editing later.</li>
+        <li>Export Fillable PDF when the form layout is ready.</li>
+      </ol>
+    </section>
+
+    <section class="topic" id="blank-form">
+      <h2>Create a form from scratch</h2>
+      <ol>
+        <li>Click <strong>New Blank Form</strong>.</li>
+        <li>Choose filename, page size, orientation, and number of pages.</li>
+        <li>Add static text, images, whiteout, and fillable fields as needed.</li>
+        <li>Use Preview to check the result, then Save Project or Export Fillable PDF.</li>
+      </ol>
+    </section>
+
+    <section class="topic" id="place-fields">
+      <h2>Add and place fields</h2>
+      <p>Click a field type, then click the document to place it. Double-click a field type to keep placing the same type until you press <span class="key">Esc</span> or select another tool.</p>
+      <p>For Text and Date fields, the click point is treated as the bottom-left corner of the field. If the click is near a detected line, OpenPDFForms tries to size the text box to the line automatically.</p>
+      <p>During repeated Radio placement, hold <span class="key">Ctrl+G</span> (Windows/Linux) or <span class="key">Cmd+G</span> (Mac) to group the radio buttons you click. Release the hotkey to end that group, then hold it again to start another group. Groups are named with short names such as <code>radio_group_1</code>.</p>
+      <p>During Text or Date placement, press <span class="key">Ctrl+2</span> through <span class="key">Ctrl+9</span> (Windows/Linux) or <span class="key">Cmd+2</span> through <span class="key">Cmd+9</span> (Mac) before clicking to split the detected line into that many side-by-side text/date boxes.</p>
+    </section>
+
+    <section class="topic" id="edit-base">
+      <h2>Edit the base document</h2>
+      <p>The <strong>Form Editor</strong> section contains objects that become part of the printed page rather than fillable fields:</p>
+      <ul>
+        <li><strong>Static Text</strong> adds fixed text such as headings, instructions, or replacement labels.</li>
+        <li><strong>Whiteout</strong> draws a white rectangle over existing page content. This is a visual cover, not secure redaction.</li>
+        <li><strong>Image</strong> inserts a fixed image into the page.</li>
+      </ul>
+      <p>These objects appear in Preview and are included in exported PDFs.</p>
+    </section>
+
+    <section class="topic" id="fill-sign">
+      <h2>Fill and sign</h2>
+      <ol>
+        <li>Open or upload a form project.</li>
+        <li>Choose Fill &amp; Sign.</li>
+        <li>Fill visible fields in the browser.</li>
+        <li>Click a Mock Sign, Initials, or E Sign field to sign.</li>
+        <li>Required visible fields must be filled before signing.</li>
+        <li>Download Current Copy when the filled or signed copy is ready.</li>
+      </ol>
+    </section>
+
+    <section class="topic" id="trust">
+      <h2>E Sign trust</h2>
+      <p>OpenPDFForms generates a local root certificate and local signing identity on first use. Download the Trust Certificate from the toolbar and install it only on machines that should trust signatures produced by that OpenPDFForms instance.</p>
+      <div class="callout">The local certificate authority is useful for private/internal workflows. Publicly trusted or regulated signing workflows should use organization-managed certificates, hardware-backed keys, timestamp authority support, and formal identity proofing. Those are roadmap items rather than a claim of current Adobe Sign equivalence.</div>
+    </section>
+
+    <section class="topic" id="scripts">
+      <h2>Custom scripts</h2>
+      <p>The Custom Script section accepts Acrobat JavaScript snippets for format, validation, and calculation events. Button fields can also run selected built-in actions or a custom button-action script. These scripts run only in PDF viewers that execute Acrobat JavaScript, such as Adobe Acrobat/Reader. Viewers without PDF JavaScript support will still show the form fields, but scripted behavior may not run.</p>
+      <p>Use the script test buttons to check basic syntax and preview simple output before export. Final behavior still depends on the PDF viewer's Acrobat JavaScript support.</p>
+      <p>Visual conditional logic is converted into Acrobat JavaScript. The generated script is shown in the Inspector and can be copied into the Calculate script box for advanced editing.</p>
+    </section>
+
+    <section class="topic" id="hooks">
+      <h2>Python hooks</h2>
+      <p>Copy <code>hooks.example.py</code> to <code>hooks.py</code> and edit <code>process_fields()</code> to rename, filter, or adjust detected fields before they appear in the editor.</p>
+    </section>
+
+    <section class="topic" id="access-control">
+      <h2>Access control</h2>
+      <p>OpenPDFForms includes app-level login and admin user management. On a new install, visit the app and create the first administrator account on the setup page. After signing in, admins can open <strong>Users</strong> from the top toolbar to add users, disable users, reset passwords, grant or remove admin access, and delete users.</p>
+      <p>Admins can also set session behavior by user:</p>
+      <ul>
+        <li><strong>Idle timeout</strong>: no idle timeout, 15 minutes, 30 minutes, 1 hour, or 2 hours.</li>
+        <li><strong>Remember</strong>: keep the login cookie for 1, 7, 30, or 90 days.</li>
+        <li><strong>Logout when browser closes</strong>: use a browser-session cookie instead of a remembered login.</li>
+      </ul>
+      <p>Idle timeout applies server-side as soon as it is changed. Remember duration and browser-close logout affect the user's next login cookie.</p>
+    </section>
+  </main>
+</div>
+</body>
+</html>
