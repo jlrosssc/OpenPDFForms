@@ -1206,16 +1206,123 @@ function stopPlacing() {
   });
 }
 
-function placeField(type, pageElement, pageIndex, event) {
-  const img = pageElement.querySelector("img");
+function canAutoFitTextLine(type) {
+  return ["text", "date", "dropdown", "button"].includes(type);
+}
+
+function pagePointFromEvent(img, pageIndex, event) {
   const rect = img.getBoundingClientRect();
   const [pdfWidth, pdfHeight] = state.pageSizes[pageIndex];
   const scaleX = img.clientWidth / pdfWidth;
   const scaleY = img.clientHeight / pdfHeight;
-  const width = type === "checkbox" || type === "radio" ? 14 : type === "digital_signature" ? 200 : type === "initials" ? 80 : 160;
-  const height = type === "checkbox" || type === "radio" ? 14 : type === "digital_signature" ? 60 : type === "initials" ? 28 : type === "listbox" ? 70 : 20;
-  const x = Math.max(0, (event.clientX - rect.left) / scaleX - width / 2);
-  const y = Math.max(0, (event.clientY - rect.top) / scaleY - height / 2);
+  return {
+    x: Math.max(0, (event.clientX - rect.left) / scaleX),
+    y: Math.max(0, (event.clientY - rect.top) / scaleY),
+    scaleX,
+    scaleY,
+    pdfWidth,
+    pdfHeight,
+  };
+}
+
+function isDarkPixel(data, index) {
+  const red = data[index];
+  const green = data[index + 1];
+  const blue = data[index + 2];
+  const alpha = data[index + 3];
+  if (alpha < 40) return false;
+  return red + green + blue < 390;
+}
+
+function renderedImageCanvas(img) {
+  if (!img.complete || !img.naturalWidth || !img.naturalHeight) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(img, 0, 0);
+  return { canvas, context };
+}
+
+function findHorizontalLineRun(img, pageIndex, point) {
+  const rendered = renderedImageCanvas(img);
+  if (!rendered) return null;
+  const { canvas, context } = rendered;
+  const pdfToImageX = canvas.width / point.pdfWidth;
+  const pdfToImageY = canvas.height / point.pdfHeight;
+  const clickX = Math.round(point.x * pdfToImageX);
+  const clickY = Math.round(point.y * pdfToImageY);
+  const searchUp = Math.round(11 * pdfToImageY);
+  const searchDown = Math.round(13 * pdfToImageY);
+  const startPadding = Math.round(2 * pdfToImageX);
+  const maxGap = Math.max(2, Math.round(3 * pdfToImageX));
+  const minRun = Math.max(18, Math.round(30 * pdfToImageX));
+  const rightLimit = Math.min(canvas.width - 1, clickX + Math.round(520 * pdfToImageX));
+  const leftLimit = Math.max(0, clickX - Math.round(10 * pdfToImageX));
+  let best = null;
+
+  for (let y = Math.max(0, clickY - searchUp); y <= Math.min(canvas.height - 1, clickY + searchDown); y += 1) {
+    const row = context.getImageData(leftLimit, y, rightLimit - leftLimit + 1, 1).data;
+    let runStart = null;
+    let runEnd = null;
+    let gap = 0;
+    for (let x = Math.max(clickX + startPadding, leftLimit); x <= rightLimit; x += 1) {
+      const dark = isDarkPixel(row, (x - leftLimit) * 4);
+      if (dark) {
+        if (runStart === null) runStart = x;
+        runEnd = x;
+        gap = 0;
+      } else if (runStart !== null) {
+        gap += 1;
+        if (gap > maxGap) break;
+      }
+    }
+    if (runStart === null || runEnd === null) continue;
+    const length = runEnd - runStart + 1;
+    if (length < minRun) continue;
+    const score = length - Math.abs(y - clickY) * 5;
+    if (!best || score > best.score) {
+      best = { x1: clickX, x2: runEnd, y, length, score };
+    }
+  }
+
+  if (!best) return null;
+  return {
+    x: Math.max(0, point.x),
+    y: Math.max(0, best.y / pdfToImageY - 14),
+    width: Math.max(40, (best.x2 - clickX) / pdfToImageX),
+    height: 18,
+  };
+}
+
+function fieldGeometryForPlacement(type, img, pageIndex, event) {
+  const point = pagePointFromEvent(img, pageIndex, event);
+  let width = type === "checkbox" || type === "radio" ? 14 : type === "digital_signature" ? 200 : type === "initials" ? 80 : 160;
+  let height = type === "checkbox" || type === "radio" ? 14 : type === "digital_signature" ? 60 : type === "initials" ? 28 : type === "listbox" ? 70 : 20;
+
+  if (canAutoFitTextLine(type)) {
+    const lineFit = findHorizontalLineRun(img, pageIndex, point);
+    if (lineFit) {
+      return {
+        x: Math.min(lineFit.x, point.pdfWidth - lineFit.width),
+        y: Math.min(lineFit.y, point.pdfHeight - lineFit.height),
+        width: Math.min(lineFit.width, point.pdfWidth - lineFit.x),
+        height: lineFit.height,
+      };
+    }
+  }
+
+  return {
+    x: Math.max(0, Math.min(point.x - width / 2, point.pdfWidth - width)),
+    y: Math.max(0, Math.min(point.y - height / 2, point.pdfHeight - height)),
+    width,
+    height,
+  };
+}
+
+function placeField(type, pageElement, pageIndex, event) {
+  const img = pageElement.querySelector("img");
+  const { x, y, width, height } = fieldGeometryForPlacement(type, img, pageIndex, event);
   const id = generateId();
   pushHistory();
   state.fields.push({

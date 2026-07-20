@@ -214,10 +214,39 @@ def _detect_text_fields_from_text(page_index: int, lines: list[dict], page_width
         x0, y0, x1, y1 = line["bbox"]
         if "_" in text:
             for match in re.finditer(r"_{4,}", text):
-                width = max(70.0, min(260.0, match.end() - match.start()) * 6.0)
-                field_x = min(page_width - width - 24.0, x0 + match.start() * 5.2)
-                label = text[: match.start()].strip(" :_")
-                fields.append(_field(page_index, FieldType.text, field_x, y0 - 2, width, max(16.0, y1 - y0 + 4), label, confidence=0.8, source="underscore_text"))
+                char_width = (x1 - x0) / max(len(text), 1)
+                raw_width = (match.end() - match.start()) * char_width
+                width = max(45.0, min(260.0, raw_width))
+                field_x = min(page_width - width - 24.0, x0 + match.start() * char_width)
+                label = _label_before_underline(text, match.start())
+                if not label:
+                    split_fields = _fields_from_helper_labels_below(
+                        page_index,
+                        line,
+                        lines,
+                        x0 + match.start() * char_width,
+                        y0,
+                        y1,
+                        raw_width,
+                    )
+                    if split_fields:
+                        fields.extend(split_fields)
+                        continue
+                line_height = y1 - y0
+                field_y = y0 + max(1.5, line_height * 0.18)
+                fields.append(
+                    _field(
+                        page_index,
+                        FieldType.text,
+                        field_x,
+                        field_y,
+                        width,
+                        max(14.0, line_height + 1.0),
+                        label,
+                        confidence=0.8,
+                        source="underscore_text",
+                    )
+                )
             continue
         if text.endswith(":"):
             if not _is_likely_form_label(text):
@@ -268,6 +297,88 @@ def _choice_label_from_text(text: str, start: int, end: int) -> str:
     return prompt or option or text
 
 
+def _label_before_underline(text: str, start: int) -> str:
+    prefix = text[:start].replace("_", " ").strip(" :")
+    if not prefix:
+        return ""
+    candidates = re.split(r"\s{2,}", prefix)
+    label = candidates[-1].strip(" :") if candidates else prefix
+    if ":" in label:
+        label = label.rsplit(":", 1)[0].strip()
+    if "☐" in label:
+        label = label.rsplit("☐", 1)[-1].strip()
+        label = re.sub(r"^(yes|no)\*?\s+", "", label, flags=re.IGNORECASE).strip()
+    words = label.split()
+    return " ".join(words[-5:])
+
+
+def _fields_from_helper_labels_below(
+    page_index: int,
+    underline_line: dict,
+    lines: list[dict],
+    field_x: float,
+    y0: float,
+    y1: float,
+    width: float,
+) -> list[FormField]:
+    ux0, _uy0, ux1, _uy1 = underline_line["bbox"]
+    candidates = []
+    for line in lines:
+        text = line["text"].strip()
+        if not _is_helper_label(text):
+            continue
+        lx0, ly0, lx1, ly1 = line["bbox"]
+        overlap = max(0.0, min(ux1, lx1) - max(ux0, lx0))
+        helper_center_y = (ly0 + ly1) / 2
+        underline_center_y = (y0 + y1) / 2
+        if helper_center_y > underline_center_y and -8 <= ly0 - y1 <= 20 and overlap >= min(ux1 - ux0, lx1 - lx0) * 0.45:
+            candidates.append(line)
+    if not candidates:
+        return []
+
+    helper = min(candidates, key=lambda item: item["bbox"][1] - y1)
+    chunks = _helper_label_chunks(helper)
+    if len(chunks) < 2:
+        return []
+
+    line_height = y1 - y0
+    field_y = y0 + max(1.5, line_height * 0.18)
+    fields: list[FormField] = []
+    centers = [(chunk[1] + chunk[2]) / 2 for chunk in chunks]
+    for index, (label, _left, _right) in enumerate(chunks):
+        left_bound = field_x if index == 0 else (centers[index - 1] + centers[index]) / 2
+        right_bound = field_x + width if index == len(chunks) - 1 else (centers[index] + centers[index + 1]) / 2
+        if right_bound - left_bound < 24:
+            continue
+        fields.append(
+            _field(
+                page_index,
+                FieldType.text,
+                left_bound,
+                field_y,
+                right_bound - left_bound,
+                max(14.0, line_height + 1.0),
+                label,
+                confidence=0.82,
+                source="helper_labeled_underline",
+            )
+        )
+    return fields
+
+
+def _helper_label_chunks(line: dict) -> list[tuple[str, float, float]]:
+    text = line["text"]
+    x0, _y0, x1, _y1 = line["bbox"]
+    char_width = (x1 - x0) / max(len(text), 1)
+    chunks: list[tuple[str, float, float]] = []
+    for match in re.finditer(r"\S+(?:\s+\S+)*?(?=\s{2,}|$)", text):
+        label = match.group(0).strip()
+        if not label:
+            continue
+        chunks.append((label, x0 + match.start() * char_width, x0 + match.end() * char_width))
+    return chunks
+
+
 def _detect_vector_form_fields(page: fitz.Page, page_index: int, lines: list[dict]) -> list[FormField]:
     horizontal, vertical, rects = _vector_geometry(page)
     if len(horizontal) < 8 or len(vertical) < 4:
@@ -276,6 +387,10 @@ def _detect_vector_form_fields(page: fitz.Page, page_index: int, lines: list[dic
     fields: list[FormField] = []
     for line in lines:
         text = line["text"].strip()
+        if "_" in text or "☐" in text:
+            continue
+        if _is_helper_label(text):
+            continue
         if not _is_likely_form_label(text):
             continue
         cell = _find_cell_for_label(line["bbox"], horizontal, vertical)
@@ -674,6 +789,28 @@ def _looks_like_instruction_page(lines: list[dict]) -> bool:
 def _is_underscore_answer_line(text: str) -> bool:
     normalized = " ".join(text.strip().split()).lower()
     return "____" in normalized or normalized.startswith("*if yes")
+
+
+def _is_helper_label(text: str) -> bool:
+    normalized = " ".join(text.strip().split()).lower()
+    if not normalized or ":" in normalized:
+        return False
+    helper_terms = {
+        "first",
+        "middle",
+        "last",
+        "address",
+        "street",
+        "apt",
+        "suite",
+        "city",
+        "state",
+        "zip",
+        "code",
+        "individual",
+    }
+    words = set(re.findall(r"[a-z]+", normalized))
+    return bool(words) and words.issubset(helper_terms) and len(words) >= 2
 
 
 def _is_heading_like_label(text: str, y: float) -> bool:
