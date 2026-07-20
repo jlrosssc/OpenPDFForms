@@ -122,11 +122,9 @@ def _detect_page_fields(page: fitz.Page, page_index: int) -> list[FormField]:
     if _looks_like_instruction_page(text_lines):
         return []
     vector_fields = _detect_vector_form_fields(page, page_index, text_lines)
-    if len(vector_fields) >= 5:
-        return _dedupe_fields(vector_fields)
-
-    fields = []
+    fields = list(vector_fields)
     fields.extend(_detect_text_fields_from_text(page_index, text_lines, page.rect.width))
+    fields.extend(_detect_choice_fields_from_text(page_index, text_lines))
     fields.extend(_detect_shape_fields(page, page_index, text_lines))
     return _dedupe_fields(fields)
 
@@ -230,6 +228,44 @@ def _detect_text_fields_from_text(page_index: int, lines: list[dict], page_width
                 confidence = 0.72 if line.get("source") == "ocr" else 0.78
                 fields.append(_field(page_index, FieldType.text, x1 + 8.0, y0 - 2.0, min(available, 260.0), max(16.0, y1 - y0 + 4), text.rstrip(":"), confidence=confidence, source=source))
     return fields
+
+
+def _detect_choice_fields_from_text(page_index: int, lines: list[dict]) -> list[FormField]:
+    fields: list[FormField] = []
+    for line in lines:
+        text = line["text"]
+        if "☐" not in text:
+            continue
+        x0, y0, x1, y1 = line["bbox"]
+        char_width = (x1 - x0) / max(len(text), 1)
+        for match in re.finditer("☐", text):
+            if not _is_likely_checkbox_label(text):
+                continue
+            label = _choice_label_from_text(text, match.start(), match.end())
+            field_x = x0 + match.start() * char_width
+            field_size = max(9.0, min(14.0, y1 - y0 + 1.0))
+            fields.append(
+                _field(
+                    page_index,
+                    FieldType.checkbox,
+                    field_x,
+                    y0 + max(0.0, (y1 - y0 - field_size) / 2),
+                    field_size,
+                    field_size,
+                    label or text,
+                    confidence=0.84,
+                    source="text_choice_glyph",
+                )
+            )
+    return fields
+
+
+def _choice_label_from_text(text: str, start: int, end: int) -> str:
+    prompt = text.split("☐", 1)[0].strip(" :")
+    option = text[end:].split("☐", 1)[0].strip(" :")
+    if prompt and option:
+        return f"{prompt} {option}"
+    return prompt or option or text
 
 
 def _detect_vector_form_fields(page: fitz.Page, page_index: int, lines: list[dict]) -> list[FormField]:
@@ -635,6 +671,22 @@ def _looks_like_instruction_page(lines: list[dict]) -> bool:
     )
 
 
+def _is_underscore_answer_line(text: str) -> bool:
+    normalized = " ".join(text.strip().split()).lower()
+    return "____" in normalized or normalized.startswith("*if yes")
+
+
+def _is_heading_like_label(text: str, y: float) -> bool:
+    normalized = " ".join(text.strip().split())
+    if y >= 120 or ":" in normalized or "_" in normalized:
+        return False
+    letters = re.findall(r"[A-Za-z]", normalized)
+    if len(letters) < 6:
+        return False
+    uppercase_ratio = sum(1 for letter in letters if letter.isupper()) / len(letters)
+    return uppercase_ratio >= 0.8
+
+
 def _detect_shape_fields(page: fitz.Page, page_index: int, lines: list[dict]) -> list[FormField]:
     pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
     image = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
@@ -657,12 +709,30 @@ def _detect_shape_fields(page: fitz.Page, page_index: int, lines: list[dict]) ->
                     or _nearest_left_label(lines, pdf_x, pdf_y, pdf_h)
                     or _nearest_above_label(lines, pdf_x, pdf_y, pdf_w)
                 )
-                if label and _is_likely_form_label(label):
-                    fields.append(_field(page_index, field_type, pdf_x, pdf_y, max(pdf_w, 10), max(pdf_h, 10), label))
+                if label and _is_likely_checkbox_label(label) and not _is_underscore_answer_line(label):
+                    fields.append(
+                        _field(
+                            page_index,
+                            field_type,
+                            pdf_x,
+                            pdf_y,
+                            max(pdf_w, 10),
+                            max(pdf_h, 10),
+                            label,
+                            confidence=0.76,
+                            source="image_choice_shape",
+                        )
+                    )
         elif pdf_w >= 55 and 6 <= pdf_h <= 20:
             if _looks_like_horizontal_line(contour):
                 label = _nearest_left_label(lines, pdf_x, pdf_y, pdf_h) or _nearest_above_label(lines, pdf_x, pdf_y, pdf_w)
-                if label and _is_likely_form_label(label):
+                if (
+                    label
+                    and "☐" not in label
+                    and not _is_underscore_answer_line(label)
+                    and not _is_heading_like_label(label, pdf_y)
+                    and _is_likely_form_label(label)
+                ):
                     fields.append(_field(page_index, FieldType.text, pdf_x, pdf_y - 9, min(pdf_w, 320), 18, label))
     return fields
 
@@ -774,9 +844,45 @@ def _dedupe_fields(fields: list[FormField]) -> list[FormField]:
     for field in fields:
         if any(field.page == other.page and _overlap_ratio(field, other) > 0.55 for other in kept):
             continue
+        if field.detection_source == "image_choice_shape" and any(_covered_by_text_choice(field, other) for other in kept):
+            continue
+        if field.type in (FieldType.checkbox, FieldType.radio) and any(_same_choice_cluster(field, other) for other in kept):
+            continue
         kept.append(field)
     _assign_radio_groups(kept)
     return _renumber_generated_field_names(kept)
+
+
+def _same_choice_cluster(a: FormField, b: FormField) -> bool:
+    if b.type not in (FieldType.checkbox, FieldType.radio):
+        return False
+    if a.page != b.page:
+        return False
+    if " ".join(a.label.lower().split()) != " ".join(b.label.lower().split()):
+        return False
+    same_row = abs((a.y + a.height / 2) - (b.y + b.height / 2)) <= 4
+    close_x = abs((a.x + a.width / 2) - (b.x + b.width / 2)) <= 28
+    return same_row and close_x
+
+
+def _covered_by_text_choice(a: FormField, b: FormField) -> bool:
+    if b.detection_source != "text_choice_glyph":
+        return False
+    if a.page != b.page or a.type not in (FieldType.checkbox, FieldType.radio):
+        return False
+    if b.type not in (FieldType.checkbox, FieldType.radio):
+        return False
+    a_label = _normalize_choice_label(a.label)
+    b_label = _normalize_choice_label(b.label)
+    related_label = a_label and (a_label in b_label or b_label in a_label)
+    near_row = abs((a.y + a.height / 2) - (b.y + b.height / 2)) <= 36
+    return related_label and near_row
+
+
+def _normalize_choice_label(label: str) -> str:
+    normalized = label.lower().replace("☐", " ")
+    normalized = re.sub(r"\b(yes|no)\b", " ", normalized)
+    return " ".join(normalized.split())
 
 
 def _renumber_generated_field_names(fields: list[FormField]) -> list[FormField]:
