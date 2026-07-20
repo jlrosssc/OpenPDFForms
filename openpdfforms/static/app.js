@@ -143,6 +143,13 @@ function normalizeGeneratedFieldNames(fields) {
 
 const pages = document.querySelector("#pages");
 const pdfInput = document.querySelector("#pdf-input");
+const newBlankButton = document.querySelector("#new-blank-button");
+const blankDialog = document.querySelector("#blank-dialog");
+const blankFilename = document.querySelector("#blank-filename");
+const blankPageSize = document.querySelector("#blank-page-size");
+const blankOrientation = document.querySelector("#blank-orientation");
+const blankPageCount = document.querySelector("#blank-page-count");
+const createBlankButton = document.querySelector("#create-blank-button");
 const previewButton = document.querySelector("#preview-button");
 const previewDialog = document.querySelector("#preview-dialog");
 const previewPages = document.querySelector("#preview-pages");
@@ -312,6 +319,33 @@ pdfInput.addEventListener("change", async () => {
   const info = await response.json();
   loadDocumentInfo(info);
 });
+
+newBlankButton.addEventListener("click", () => {
+  blankDialog.showModal();
+});
+
+createBlankButton.addEventListener("click", createBlankDocument);
+
+async function createBlankDocument() {
+  const payload = {
+    filename: blankFilename.value.trim() || "Blank Form.pdf",
+    page_size: blankPageSize.value || "letter",
+    orientation: blankOrientation.value || "portrait",
+    page_count: Math.max(1, Math.min(50, Math.round(numberValue(blankPageCount.value, 1)))),
+  };
+  pages.innerHTML = "<div class=\"empty\"><h2>Creating blank form...</h2></div>";
+  const response = await fetch(appUrl("api/documents/blank"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    pages.innerHTML = `<div class="empty"><h2>Create failed</h2><p>${await response.text()}</p></div>`;
+    return;
+  }
+  blankDialog.close();
+  loadDocumentInfo(await response.json());
+}
 
 document.querySelectorAll("[data-add]").forEach((button) => {
   button.addEventListener("click", () => startPlacing(button.dataset.add));

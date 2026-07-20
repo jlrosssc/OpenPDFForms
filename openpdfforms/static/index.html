@@ -9,7 +9,7 @@
 <body>
   <header class="topbar">
     <div>
-      <h1>OpenPDFForms <span class="app-version">v0.3.17</span></h1>
+      <h1>OpenPDFForms <span class="app-version">v0.3.18</span></h1>
       <p>Detect, review, and export fillable PDF forms.</p>
     </div>
     <div class="actions">
@@ -17,6 +17,7 @@
         <input id="pdf-input" type="file" accept="application/pdf,image/*,.doc,.docx,.odt,.rtf,.txt,.xls,.xlsx,.ods,.csv,.ppt,.pptx,.odp">
         Upload File
       </label>
+      <button id="new-blank-button" type="button">New Blank Form</button>
       <button id="open-project-button" type="button">Open Project</button>
       <button id="save-project-button" type="button" disabled>Save Project</button>
       <button id="undo-button" type="button" disabled title="Undo (Ctrl/Cmd+Z)">Undo</button>
@@ -250,6 +251,33 @@
         <button value="cancel" aria-label="Close">x</button>
       </header>
       <div id="project-list" class="project-list"></div>
+    </form>
+  </dialog>
+
+  <dialog id="blank-dialog" class="modal">
+    <form method="dialog">
+      <header>
+        <h2>New Blank Form</h2>
+        <button value="cancel" aria-label="Close">x</button>
+      </header>
+      <label>Filename<input id="blank-filename" value="Blank Form.pdf"></label>
+      <label>Page size
+        <select id="blank-page-size">
+          <option value="letter">Letter</option>
+          <option value="legal">Legal</option>
+          <option value="a4">A4</option>
+        </select>
+      </label>
+      <label>Orientation
+        <select id="blank-orientation">
+          <option value="portrait">Portrait</option>
+          <option value="landscape">Landscape</option>
+        </select>
+      </label>
+      <label>Pages<input id="blank-page-count" type="number" min="1" max="50" value="1"></label>
+      <footer>
+        <button id="create-blank-button" type="button">Create</button>
+      </footer>
     </form>
   </dialog>
 

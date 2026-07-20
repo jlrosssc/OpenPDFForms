@@ -84,6 +84,13 @@ class DocumentInfo(BaseModel):
     fields: list[FormField]
 
 
+class BlankDocumentRequest(BaseModel):
+    page_size: str = "letter"
+    orientation: str = "portrait"
+    page_count: int = Field(default=1, ge=1, le=50)
+    filename: str = "Blank Form.pdf"
+
+
 class ExportRequest(BaseModel):
     fields: list[FormField]
 

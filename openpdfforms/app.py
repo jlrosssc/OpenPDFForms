@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import os
 from typing import Annotated
 
+import fitz
 from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -28,7 +29,7 @@ from .auth import (
 from .converter import ConversionError, convert_upload_to_pdf
 from .detector import detect_fields, import_existing_fields, render_pdf_pages
 from .exporter import export_fillable_pdf
-from .models import DocumentInfo, ExportRequest, ExportResponse, FillSignRequest, PreviewResponse, ProjectSaveRequest, ProjectSummary
+from .models import BlankDocumentRequest, DocumentInfo, ExportRequest, ExportResponse, FillSignRequest, PreviewResponse, ProjectSaveRequest, ProjectSummary
 from .signing import CA_CERT_PATH, apply_field_values, ensure_root_ca, sign_field
 from .storage import (
     EXPORT_ROOT,
@@ -239,6 +240,42 @@ async def upload_document(file: UploadFile = File(...)) -> DocumentInfo:
         page_sizes=page_sizes,
         render_urls=render_urls,
         fields=fields,
+    )
+
+
+BLANK_PAGE_SIZES = {
+    "letter": (612.0, 792.0),
+    "legal": (612.0, 1008.0),
+    "a4": (595.28, 841.89),
+}
+
+
+@app.post("/api/documents/blank", response_model=DocumentInfo)
+def create_blank_document(request: BlankDocumentRequest) -> DocumentInfo:
+    width, height = BLANK_PAGE_SIZES.get(request.page_size, BLANK_PAGE_SIZES["letter"])
+    if request.orientation == "landscape":
+        width, height = height, width
+
+    document_id = new_document_id()
+    source_path = UPLOAD_ROOT / f"{document_id}.pdf"
+    filename = Path(request.filename or "Blank Form.pdf").name
+    if not filename.lower().endswith(".pdf"):
+        filename = f"{filename}.pdf"
+
+    with fitz.open() as doc:
+        for _index in range(request.page_count):
+            doc.new_page(width=width, height=height)
+        doc.save(source_path)
+
+    render_dir = reset_render_dir(document_id)
+    render_urls, page_sizes = render_pdf_pages(source_path, render_dir)
+    return DocumentInfo(
+        document_id=document_id,
+        filename=filename,
+        page_count=len(page_sizes),
+        page_sizes=page_sizes,
+        render_urls=render_urls,
+        fields=[],
     )
 
 
