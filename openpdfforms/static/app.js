@@ -821,6 +821,9 @@ function renderFillControls({ clearSelector, pageSelector, inputClass, signClass
       el.style.top = `${field.y * scaleY}px`;
       el.style.width = `${field.width * scaleX}px`;
       el.style.height = `${field.height * scaleY}px`;
+      if (!["checkbox", "radio"].includes(field.type) && field.font_size) {
+        el.style.fontSize = `${Math.max(7, field.font_size * scaleY)}px`;
+      }
     };
 
     if (field.hidden) return;

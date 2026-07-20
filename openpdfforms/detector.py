@@ -233,7 +233,9 @@ def _detect_text_fields_from_text(page_index: int, lines: list[dict], page_width
                         fields.extend(split_fields)
                         continue
                 line_height = y1 - y0
-                field_y = y0 + max(1.5, line_height * 0.18)
+                field_height = max(14.0, line_height + 1.0)
+                field_y = _underline_field_y(y0, y1, field_height)
+                font_size = _estimated_font_size(line_height, field_height)
                 fields.append(
                     _field(
                         page_index,
@@ -241,10 +243,11 @@ def _detect_text_fields_from_text(page_index: int, lines: list[dict], page_width
                         field_x,
                         field_y,
                         width,
-                        max(14.0, line_height + 1.0),
+                        field_height,
                         label,
                         confidence=0.8,
                         source="underscore_text",
+                        font_size=font_size,
                     )
                 )
             continue
@@ -255,7 +258,22 @@ def _detect_text_fields_from_text(page_index: int, lines: list[dict], page_width
             if available >= 90.0 and len(text) <= 55:
                 source = "ocr_colon_label" if line.get("source") == "ocr" else "colon_label"
                 confidence = 0.72 if line.get("source") == "ocr" else 0.78
-                fields.append(_field(page_index, FieldType.text, x1 + 8.0, y0 - 2.0, min(available, 260.0), max(16.0, y1 - y0 + 4), text.rstrip(":"), confidence=confidence, source=source))
+                line_height = y1 - y0
+                field_height = max(16.0, line_height + 4)
+                fields.append(
+                    _field(
+                        page_index,
+                        FieldType.text,
+                        x1 + 8.0,
+                        y0 - 2.0,
+                        min(available, 260.0),
+                        field_height,
+                        text.rstrip(":"),
+                        confidence=confidence,
+                        source=source,
+                        font_size=_estimated_font_size(line_height, field_height),
+                    )
+                )
     return fields
 
 
@@ -342,7 +360,9 @@ def _fields_from_helper_labels_below(
         return []
 
     line_height = y1 - y0
-    field_y = y0 + max(1.5, line_height * 0.18)
+    field_height = max(14.0, line_height + 1.0)
+    field_y = _underline_field_y(y0, y1, field_height)
+    font_size = _estimated_font_size(line_height, field_height)
     fields: list[FormField] = []
     centers = [(chunk[1] + chunk[2]) / 2 for chunk in chunks]
     for index, (label, _left, _right) in enumerate(chunks):
@@ -357,13 +377,26 @@ def _fields_from_helper_labels_below(
                 left_bound,
                 field_y,
                 right_bound - left_bound,
-                max(14.0, line_height + 1.0),
+                field_height,
                 label,
                 confidence=0.82,
                 source="helper_labeled_underline",
+                font_size=font_size,
             )
         )
     return fields
+
+
+def _underline_field_y(y0: float, y1: float, field_height: float) -> float:
+    # Put the fillable field over the printed underline, with its lower edge
+    # near the underline instead of below it.
+    line_height = y1 - y0
+    return max(0.0, y1 - field_height - max(0.5, line_height * 0.08))
+
+
+def _estimated_font_size(source_height: float, field_height: float) -> float:
+    size = min(field_height - 2.5, max(7.0, source_height * 0.82))
+    return round(max(6.0, min(18.0, size)) * 2) / 2
 
 
 def _helper_label_chunks(line: dict) -> list[tuple[str, float, float]]:
@@ -415,6 +448,8 @@ def _detect_vector_form_fields(page: fitz.Page, page_index: int, lines: list[dic
             continue
         if text.startswith("$"):
             field_left = max(field_left, x0 + 10.0)
+        line_height = y1 - line["bbox"][1]
+        field_height = field_bottom - field_top
         fields.append(
             _field(
                 page_index,
@@ -422,10 +457,11 @@ def _detect_vector_form_fields(page: fitz.Page, page_index: int, lines: list[dic
                 field_left,
                 field_top,
                 right - field_left - 4.0,
-                field_bottom - field_top,
+                field_height,
                 text.rstrip(":"),
                 confidence=0.85,
                 source="table_label_cell",
+                font_size=_estimated_font_size(line_height, field_height),
             )
         )
 
@@ -564,6 +600,7 @@ def _detect_empty_table_cells(
                 label,
                 confidence=0.82,
                 source="empty_table_cell",
+                font_size=_estimated_font_size(field_height, field_height),
             )
             field.multiline = height >= 34 and width >= 100
             fields.append(field)
@@ -870,7 +907,18 @@ def _detect_shape_fields(page: fitz.Page, page_index: int, lines: list[dict]) ->
                     and not _is_heading_like_label(label, pdf_y)
                     and _is_likely_form_label(label)
                 ):
-                    fields.append(_field(page_index, FieldType.text, pdf_x, pdf_y - 9, min(pdf_w, 320), 18, label))
+                    fields.append(
+                        _field(
+                            page_index,
+                            FieldType.text,
+                            pdf_x,
+                            pdf_y - 9,
+                            min(pdf_w, 320),
+                            18,
+                            label,
+                            font_size=_estimated_font_size(pdf_h, 18),
+                        )
+                    )
     return fields
 
 
@@ -956,6 +1004,7 @@ def _field(
     label: str,
     confidence: float = 0.0,
     source: str = "",
+    font_size: float | None = None,
 ) -> FormField:
     clean_label = " ".join(label.split())[:60]
     if field_type == FieldType.text:
@@ -971,6 +1020,7 @@ def _field(
         height=round(float(height), 2),
         label=clean_label,
         tooltip=clean_label,
+        font_size=font_size or 10,
         confidence=confidence,
         detection_source=source,
     )
