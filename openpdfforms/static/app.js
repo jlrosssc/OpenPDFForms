@@ -1533,6 +1533,20 @@ function fieldGeometryForPlacement(type, img, pageIndex, event) {
   let width = type === "checkbox" || type === "radio" ? 14 : type === "digital_signature" ? 200 : type === "initials" ? 80 : 160;
   let height = type === "checkbox" || type === "radio" ? 14 : type === "digital_signature" ? 60 : type === "initials" ? 28 : type === "listbox" ? 70 : 20;
 
+  if (type === "text" || type === "date") {
+    const lineFit = findHorizontalLineRun(img, pageIndex, point);
+    if (lineFit) {
+      width = Math.min(lineFit.width, point.pdfWidth - point.x);
+      height = lineFit.height;
+    }
+    return {
+      x: Math.max(0, Math.min(point.x, point.pdfWidth - width)),
+      y: Math.max(0, Math.min(point.y - height, point.pdfHeight - height)),
+      width,
+      height,
+    };
+  }
+
   if (canAutoFitTextLine(type)) {
     const lineFit = findHorizontalLineRun(img, pageIndex, point);
     if (lineFit) {
