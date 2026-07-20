@@ -22,6 +22,7 @@ const state = {
   radioGroupHotkeyDown: false,
   activeRadioPlacementGroup: "",
   nextRadioPlacementGroup: 1,
+  textSplitCount: 1,
   currentUser: null,
   previewValues: null,
 };
@@ -366,6 +367,11 @@ document.addEventListener("keydown", (event) => {
       state.radioGroupHotkeyDown = true;
       startRadioPlacementGroup();
     }
+    return;
+  }
+  if ((event.ctrlKey || event.metaKey) && /^[2-9]$/.test(event.key) && textSplitAvailable()) {
+    event.preventDefault();
+    state.textSplitCount = Number(event.key);
     return;
   }
   if (event.key === "Escape" && state.pendingType) {
@@ -1291,6 +1297,9 @@ function startPlacing(type, repeat) {
   if (type !== "radio" || !state.placingRepeat) {
     endRadioPlacementGroup();
   }
+  if (!textSplitAvailable()) {
+    state.textSplitCount = 1;
+  }
   pages.classList.add("placing");
   document.querySelectorAll("[data-add]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.add === type);
@@ -1302,6 +1311,7 @@ function stopPlacing() {
   state.pendingType = null;
   state.placingRepeat = false;
   endRadioPlacementGroup();
+  state.textSplitCount = 1;
   pages.classList.remove("placing");
   document.querySelectorAll("[data-add]").forEach((button) => {
     button.classList.remove("is-active", "is-repeating");
@@ -1310,6 +1320,10 @@ function stopPlacing() {
 
 function radioGroupingAvailable() {
   return state.pendingType === "radio" && state.placingRepeat;
+}
+
+function textSplitAvailable() {
+  return state.pendingType === "text" || state.pendingType === "date";
 }
 
 function startRadioPlacementGroup() {
@@ -1439,20 +1453,17 @@ function fieldGeometryForPlacement(type, img, pageIndex, event) {
   };
 }
 
-function placeField(type, pageElement, pageIndex, event) {
-  const img = pageElement.querySelector("img");
-  const { x, y, width, height } = fieldGeometryForPlacement(type, img, pageIndex, event);
+function baseField(type, pageIndex, geometry) {
   const id = generateId();
-  pushHistory();
   const field = {
     id,
     page: pageIndex,
     type,
     name: nextGeneratedFieldName(type),
-    x,
-    y,
-    width,
-    height,
+    x: geometry.x,
+    y: geometry.y,
+    width: geometry.width,
+    height: geometry.height,
     label: "",
     tooltip: "",
     required: false,
@@ -1483,14 +1494,48 @@ function placeField(type, pageElement, pageIndex, event) {
   if (type === "date") {
     field.format = "date";
   }
-  state.fields.push(field);
+  return field;
+}
+
+function splitTextFields(type, pageIndex, geometry, count) {
+  const gap = count > 1 ? Math.min(6, Math.max(2, geometry.width * 0.015)) : 0;
+  const itemWidth = Math.max(8, (geometry.width - gap * (count - 1)) / count);
+  const fields = [];
+  for (let index = 0; index < count; index += 1) {
+    const field = baseField(type, pageIndex, {
+      ...geometry,
+      x: geometry.x + index * (itemWidth + gap),
+      width: itemWidth,
+    });
+    field.name = nextGeneratedFieldName(type);
+    fields.push(field);
+    state.fields.push(field);
+  }
+  return fields;
+}
+
+function placeField(type, pageElement, pageIndex, event) {
+  const img = pageElement.querySelector("img");
+  const geometry = fieldGeometryForPlacement(type, img, pageIndex, event);
+  const splitCount = textSplitAvailable() ? Math.max(1, Math.min(9, state.textSplitCount || 1)) : 1;
+  pushHistory();
+  const fields = splitCount > 1 ? splitTextFields(type, pageIndex, geometry, splitCount) : [baseField(type, pageIndex, geometry)];
+  if (splitCount === 1) {
+    state.fields.push(fields[0]);
+  }
   state.currentPage = pageIndex;
+  const id = fields[fields.length - 1].id;
+  const selectedIds = new Set(fields.map((field) => field.id));
   if (state.placingRepeat) {
-    selectOnly(id);
+    state.selectedIds = selectedIds;
+    state.activeId = id;
+    afterSelectionChange();
     startPlacing(type, true);
   } else {
     stopPlacing();
-    selectOnly(id);
+    state.selectedIds = selectedIds;
+    state.activeId = id;
+    afterSelectionChange();
   }
 }
 
