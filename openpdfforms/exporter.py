@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import re
 from pathlib import Path
 
@@ -57,7 +58,7 @@ BUTTON_ACTION_SCRIPTS = {
     "submit": 'app.alert("Configure a submit URL with a custom Acrobat script before using this button in production.");',
 }
 
-BASE_DOCUMENT_TYPES = {FieldType.static_text, FieldType.whiteout}
+BASE_DOCUMENT_TYPES = {FieldType.static_text, FieldType.whiteout, FieldType.static_image}
 
 
 def _escape_js_string(value: str) -> str:
@@ -137,6 +138,15 @@ def _draw_base_document_object(page: fitz.Page, field: FormField) -> None:
     rect = fitz.Rect(field.x, field.y, field.x + field.width, field.y + field.height)
     if field.type == FieldType.whiteout:
         page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1), overlay=True)
+        return
+    if field.type == FieldType.static_image:
+        if not field.signature_data_url:
+            return
+        try:
+            _header, encoded = field.signature_data_url.split(",", 1)
+            page.insert_image(rect, stream=base64.b64decode(encoded), keep_proportion=True, overlay=True)
+        except Exception:
+            return
         return
 
     text = field.default_value or field.label or ""

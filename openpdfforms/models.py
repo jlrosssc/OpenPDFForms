@@ -16,6 +16,7 @@ class FieldType(str, Enum):
     button = "button"
     static_text = "static_text"
     whiteout = "whiteout"
+    static_image = "static_image"
     signature = "signature"
     initials = "initials"
     digital_signature = "digital_signature"

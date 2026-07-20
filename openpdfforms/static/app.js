@@ -17,6 +17,7 @@ const state = {
   mode: "design",
   pendingSignField: null,
   signedFields: new Set(),
+  pendingBaseImageDataUrl: "",
   suppressNextPageClick: false,
   radioGroupHotkeyActive: false,
   radioGroupHotkeyDown: false,
@@ -106,6 +107,7 @@ function fieldNamePrefix(type) {
     button: "button",
     static_text: "static",
     whiteout: "whiteout",
+    static_image: "image",
     signature: "signature",
     initials: "initials",
     digital_signature: "esign",
@@ -113,7 +115,7 @@ function fieldNamePrefix(type) {
 }
 
 function isGeneratedFieldName(name) {
-  return /^(text|date|checkbox|radio|dropdown|listbox|button|static|whiteout|signature|initials|esign|digital_signature|field)_\d+$/.test(name || "");
+  return /^(text|date|checkbox|radio|dropdown|listbox|button|static|whiteout|image|signature|initials|esign|digital_signature|field)_\d+$/.test(name || "");
 }
 
 function generatedFieldName(type, count) {
@@ -145,6 +147,7 @@ function normalizeGeneratedFieldNames(fields) {
 
 const pages = document.querySelector("#pages");
 const pdfInput = document.querySelector("#pdf-input");
+const baseImageInput = document.querySelector("#base-image-input");
 const newBlankButton = document.querySelector("#new-blank-button");
 const blankDialog = document.querySelector("#blank-dialog");
 const blankFilename = document.querySelector("#blank-filename");
@@ -350,14 +353,35 @@ async function createBlankDocument() {
 }
 
 document.querySelectorAll("[data-add]").forEach((button) => {
-  button.addEventListener("click", () => startPlacing(button.dataset.add));
-  button.addEventListener("dblclick", () => startPlacing(button.dataset.add, true));
+  button.addEventListener("click", () => chooseAddTool(button.dataset.add));
+  button.addEventListener("dblclick", () => chooseAddTool(button.dataset.add, true));
   button.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
+    if (button.dataset.add === "static_image") return;
     dragPlace = { type: button.dataset.add, startX: event.clientX, startY: event.clientY, moved: false, pointerId: event.pointerId };
     button.setPointerCapture(event.pointerId);
   });
 });
+
+baseImageInput.addEventListener("change", () => {
+  const file = baseImageInput.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    state.pendingBaseImageDataUrl = String(reader.result || "");
+    startPlacing("static_image", false);
+    baseImageInput.value = "";
+  });
+  reader.readAsDataURL(file);
+});
+
+function chooseAddTool(type, repeat = false) {
+  if (type === "static_image") {
+    baseImageInput.click();
+    return;
+  }
+  startPlacing(type, repeat);
+}
 
 // Supports pressing a field button and dragging straight onto the document in one
 // motion. A plain click still arms click-then-click placement via the listener
@@ -843,7 +867,7 @@ function renderInteractivePreview() {
 
 function renderPreviewControls() {
   renderFillControls({
-    clearSelector: ".preview-fill-input, .preview-fill-sign-box",
+    clearSelector: ".preview-fill-input, .preview-fill-sign-box, .preview-base-object",
     pageSelector: (field) => previewPages.querySelector(`.preview-page[data-page="${field.page}"]`),
     inputClass: "fill-input preview-fill-input",
     signClass: "fill-sign-box preview-fill-sign-box",
@@ -865,7 +889,7 @@ function fieldInitialPreviewValue(field) {
 }
 
 function isBaseDocumentObject(field) {
-  return field.type === "static_text" || field.type === "whiteout";
+  return field.type === "static_text" || field.type === "whiteout" || field.type === "static_image";
 }
 
 function formatDateValue(date, format) {
@@ -935,13 +959,19 @@ function renderFillControls({ clearSelector, pageSelector, inputClass, signClass
     if (field.hidden) return;
 
     if (isBaseDocumentObject(field)) {
-      if (inputClass.includes("preview-fill-input")) return;
       const baseObject = document.createElement("div");
-      baseObject.className = `base-object base-object-${field.type}`;
+      const previewClass = inputClass.includes("preview-fill-input") ? " preview-base-object" : "";
+      baseObject.className = `base-object base-object-${field.type}${previewClass}`;
       if (field.type === "static_text") {
         baseObject.textContent = field.default_value || field.label || "";
         baseObject.style.fontSize = `${Math.max(7, (field.font_size || 10) * scaleY)}px`;
         baseObject.style.textAlign = field.text_alignment || "left";
+      } else if (field.type === "static_image" && field.signature_data_url) {
+        const image = document.createElement("img");
+        image.src = field.signature_data_url;
+        image.alt = field.label || "Image";
+        image.draggable = false;
+        baseObject.appendChild(image);
       }
       style(baseObject);
       page.appendChild(baseObject);
@@ -1182,6 +1212,12 @@ function renderFields() {
       text.style.fontSize = `${Math.max(7, (field.font_size || 10) * scaleY)}px`;
       text.style.textAlign = field.text_alignment || "left";
       element.appendChild(text);
+    } else if (field.type === "static_image" && field.signature_data_url) {
+      const image = document.createElement("img");
+      image.className = "static-image-preview";
+      image.src = field.signature_data_url;
+      image.alt = field.label || "Image";
+      element.appendChild(image);
     }
     if (state.selectedIds.has(field.id)) {
       ["nw", "ne", "sw", "se"].forEach((corner) => {
@@ -1567,6 +1603,14 @@ function baseField(type, pageIndex, geometry) {
     field.label = "Whiteout";
     field.tooltip = "Whiteout";
     field.background_color = "#ffffff";
+  }
+  if (type === "static_image") {
+    field.label = "Image";
+    field.tooltip = "Image";
+    field.signature_data_url = state.pendingBaseImageDataUrl;
+    field.width = Math.max(field.width, 120);
+    field.height = Math.max(field.height, 80);
+    state.pendingBaseImageDataUrl = "";
   }
   if (type === "date") {
     field.format = "date";

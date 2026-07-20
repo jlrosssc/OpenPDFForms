@@ -9,7 +9,7 @@
 <body>
   <header class="topbar">
     <div>
-      <h1>OpenPDFForms <span class="app-version">v0.3.19</span></h1>
+      <h1>OpenPDFForms <span class="app-version">v0.3.21</span></h1>
       <p>Detect, review, and export fillable PDF forms.</p>
     </div>
     <div class="actions">
@@ -55,12 +55,15 @@
         <button data-add="dropdown">+ Dropdown</button>
         <button data-add="listbox">+ List Box</button>
         <button data-add="button">+ Button</button>
-        <button data-add="static_text" title="Printed page text, not a fillable field.">+ Static Text</button>
-        <button data-add="whiteout" title="White rectangle drawn onto the page to cover existing scanned content.">+ Whiteout</button>
         <button data-add="signature" title="A signature box that's signed later, in Fill &amp; Sign mode, by typing a name rendered in a script font. Locks the document at that point.">+ Mock Sign</button>
         <button data-add="initials" title="A compact typed or drawn initials box signed later in Fill &amp; Sign mode.">+ Initials</button>
         <button data-add="digital_signature" title="A signature box that's signed later, in Fill &amp; Sign mode, with a real cryptographic signature for tracking/traceability. Locks the document at that point.">+ E Sign</button>
         <button data-add="date">+ Date</button>
+        <h3 class="tool-subhead">Form Editor</h3>
+        <button data-add="static_text" title="Printed page text, not a fillable field.">+ Static Text</button>
+        <button data-add="whiteout" title="White rectangle drawn onto the page to cover existing scanned content.">+ Whiteout</button>
+        <button data-add="static_image" title="Printed page image, not a fillable field.">+ Image</button>
+        <input id="base-image-input" type="file" accept="image/*" hidden>
       </div>
       <div class="tool-group" id="arrange-group">
         <h2>Arrange</h2>
@@ -90,6 +93,7 @@
             <option value="button">Button</option>
             <option value="static_text">Static Text</option>
             <option value="whiteout">Whiteout</option>
+            <option value="static_image">Image</option>
             <option value="signature">Mock Sign</option>
             <option value="initials">Initials</option>
             <option value="digital_signature">E Sign</option>
