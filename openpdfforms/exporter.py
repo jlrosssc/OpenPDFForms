@@ -57,6 +57,8 @@ BUTTON_ACTION_SCRIPTS = {
     "submit": 'app.alert("Configure a submit URL with a custom Acrobat script before using this button in production.");',
 }
 
+BASE_DOCUMENT_TYPES = {FieldType.static_text, FieldType.whiteout}
+
 
 def _escape_js_string(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
@@ -129,6 +131,30 @@ def _button_action_script(field: FormField, fields: list[FormField]) -> str:
             return ""
         return "this.resetForm([" + ", ".join(f'"{name}"' for name in names) + "]);"
     return BUTTON_ACTION_SCRIPTS.get(field.button_action, "")
+
+
+def _draw_base_document_object(page: fitz.Page, field: FormField) -> None:
+    rect = fitz.Rect(field.x, field.y, field.x + field.width, field.y + field.height)
+    if field.type == FieldType.whiteout:
+        page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1), overlay=True)
+        return
+
+    text = field.default_value or field.label or ""
+    if not text:
+        return
+    if field.background_color:
+        fill_rgb = _hex_to_rgb(field.background_color)
+        if fill_rgb:
+            page.draw_rect(rect, color=fill_rgb, fill=fill_rgb, overlay=True)
+    page.insert_textbox(
+        rect,
+        text,
+        fontname="helv",
+        fontsize=field.font_size or 10,
+        color=(0, 0, 0),
+        align=TEXT_ALIGNMENTS.get(field.text_alignment, 0),
+        overlay=True,
+    )
 
 
 def _hex_to_rgb(hex_color: str) -> tuple[float, float, float] | None:
@@ -270,7 +296,12 @@ def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormFie
         if acro_entry[0] == "xref":
             doc.xref_set_key(int(acro_entry[1].split()[0]), "Fields", "[]")
 
+        for field in sorted((item for item in fields if item.type in BASE_DOCUMENT_TYPES), key=lambda item: (item.page, item.y, item.x)):
+            _draw_base_document_object(doc[field.page], field)
+
         for field in sorted(fields, key=lambda item: (item.page, item.tab_order or 0, item.y, item.x)):
+            if field.type in BASE_DOCUMENT_TYPES:
+                continue
             page = doc[field.page]
             widget = fitz.Widget()
             widget.field_name = field.name

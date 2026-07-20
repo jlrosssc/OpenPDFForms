@@ -360,6 +360,16 @@ button:disabled {
   border-color: #475569;
 }
 
+.field[data-type="static_text"] {
+  background: rgba(255, 255, 255, .15);
+  border-color: #0f766e;
+}
+
+.field[data-type="whiteout"] {
+  background: #fff;
+  border: 2px dashed #64748b;
+}
+
 .field[data-type="initials"] {
   background: rgba(180, 83, 9, .16);
   border: 2px dashed #b45309;
@@ -405,6 +415,31 @@ button:disabled {
   height: 100%;
   object-fit: contain;
   pointer-events: none;
+}
+
+.static-text-preview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  color: #111827;
+  pointer-events: none;
+}
+
+.base-object {
+  position: absolute;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.base-object-whiteout {
+  background: #fff;
+}
+
+.base-object-static_text {
+  color: #111827;
+  overflow: hidden;
+  white-space: pre-wrap;
 }
 
 .field::after {

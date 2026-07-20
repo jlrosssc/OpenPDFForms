@@ -14,6 +14,8 @@ class FieldType(str, Enum):
     dropdown = "dropdown"
     listbox = "listbox"
     button = "button"
+    static_text = "static_text"
+    whiteout = "whiteout"
     signature = "signature"
     initials = "initials"
     digital_signature = "digital_signature"

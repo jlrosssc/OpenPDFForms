@@ -104,6 +104,8 @@ function fieldNamePrefix(type) {
     dropdown: "dropdown",
     listbox: "listbox",
     button: "button",
+    static_text: "static",
+    whiteout: "whiteout",
     signature: "signature",
     initials: "initials",
     digital_signature: "esign",
@@ -111,7 +113,7 @@ function fieldNamePrefix(type) {
 }
 
 function isGeneratedFieldName(name) {
-  return /^(text|date|checkbox|radio|dropdown|listbox|button|signature|initials|esign|digital_signature|field)_\d+$/.test(name || "");
+  return /^(text|date|checkbox|radio|dropdown|listbox|button|static|whiteout|signature|initials|esign|digital_signature|field)_\d+$/.test(name || "");
 }
 
 function generatedFieldName(type, count) {
@@ -811,7 +813,7 @@ function exitFillMode() {
 
 function renderFillFields() {
   renderFillControls({
-    clearSelector: ".field, .fill-input, .fill-sign-box",
+    clearSelector: ".field, .fill-input, .fill-sign-box, .base-object",
     pageSelector: (field) => document.querySelector(`.page[data-page="${field.page}"]`),
     inputClass: "fill-input",
     signClass: "fill-sign-box",
@@ -860,6 +862,10 @@ function fieldInitialPreviewValue(field) {
     return formatDateValue(new Date(), field.date_format || "mm/dd/yyyy");
   }
   return field.default_value || "";
+}
+
+function isBaseDocumentObject(field) {
+  return field.type === "static_text" || field.type === "whiteout";
 }
 
 function formatDateValue(date, format) {
@@ -927,6 +933,20 @@ function renderFillControls({ clearSelector, pageSelector, inputClass, signClass
     };
 
     if (field.hidden) return;
+
+    if (isBaseDocumentObject(field)) {
+      if (inputClass.includes("preview-fill-input")) return;
+      const baseObject = document.createElement("div");
+      baseObject.className = `base-object base-object-${field.type}`;
+      if (field.type === "static_text") {
+        baseObject.textContent = field.default_value || field.label || "";
+        baseObject.style.fontSize = `${Math.max(7, (field.font_size || 10) * scaleY)}px`;
+        baseObject.style.textAlign = field.text_alignment || "left";
+      }
+      style(baseObject);
+      page.appendChild(baseObject);
+      return;
+    }
 
     if (field.type === "button") {
       const button = document.createElement("button");
@@ -1099,6 +1119,7 @@ function executeButtonAction(field, valueMap, rerender) {
   }
   if (field.button_action === "clear_form" || field.button_action === "reset_page") {
     const targetFields = state.fields.filter((item) => {
+      if (isBaseDocumentObject(item)) return false;
       if (item.id === field.id || item.read_only) return false;
       return field.button_action === "clear_form" || item.page === field.page;
     });
@@ -1154,6 +1175,13 @@ function renderFields() {
       image.className = "signature-image";
       image.src = field.signature_data_url;
       element.appendChild(image);
+    } else if (field.type === "static_text") {
+      const text = document.createElement("span");
+      text.className = "static-text-preview";
+      text.textContent = field.default_value || field.label || "Static text";
+      text.style.fontSize = `${Math.max(7, (field.font_size || 10) * scaleY)}px`;
+      text.style.textAlign = field.text_alignment || "left";
+      element.appendChild(text);
     }
     if (state.selectedIds.has(field.id)) {
       ["nw", "ne", "sw", "se"].forEach((corner) => {
@@ -1527,6 +1555,18 @@ function baseField(type, pageIndex, geometry) {
   if (type === "button") {
     field.label = "Button";
     field.tooltip = "Button";
+  }
+  if (type === "static_text") {
+    field.default_value = "Static text";
+    field.label = "Static text";
+    field.tooltip = "Static text";
+    field.border_color = "";
+    field.background_color = "";
+  }
+  if (type === "whiteout") {
+    field.label = "Whiteout";
+    field.tooltip = "Whiteout";
+    field.background_color = "#ffffff";
   }
   if (type === "date") {
     field.format = "date";
@@ -2097,6 +2137,7 @@ function confirmEsign() {
 
 function missingRequiredFields() {
   return state.fields.filter((field) => {
+    if (isBaseDocumentObject(field)) return false;
     if (!field.required || field.hidden || field.read_only || field.no_export) return false;
     if (field.type === "signature" || field.type === "initials" || field.type === "digital_signature") {
       return !state.signedFields.has(field.name) && field.name !== state.pendingSignField;
