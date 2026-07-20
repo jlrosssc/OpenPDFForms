@@ -44,6 +44,7 @@ class FormField(BaseModel):
     printable: bool = True
     no_export: bool = False
     default_value: str = ""
+    button_action: str = ""
     text_alignment: str = "left"
     border_style: str = "solid"
     tab_order: int = 0
@@ -59,6 +60,8 @@ class FormField(BaseModel):
     border_color: str = ""
     background_color: str = ""
     format: str = ""
+    date_auto_fill: bool = False
+    date_format: str = "mm/dd/yyyy"
     calc_operation: str = ""
     calc_fields: list[str] = Field(default_factory=list)
     conditions: list[ConditionRule] = Field(default_factory=list)

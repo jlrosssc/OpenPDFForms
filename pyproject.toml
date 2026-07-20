@@ -1,6 +1,6 @@
 [project]
 name = "openpdfforms"
-version = "0.3.14"
+version = "0.3.15"
 description = "Local web app for detecting, reviewing, and exporting fillable PDF forms."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"

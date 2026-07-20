@@ -9,7 +9,7 @@
 <body>
   <header class="topbar">
     <div>
-      <h1>OpenPDFForms <span class="app-version">v0.3.14</span></h1>
+      <h1>OpenPDFForms <span class="app-version">v0.3.15</span></h1>
       <p>Detect, review, and export fillable PDF forms.</p>
     </div>
     <div class="actions">
@@ -46,6 +46,7 @@
       </div>
       <div class="tool-group" id="add-field-panel">
         <h2>Add Field</h2>
+        <p class="hint">Double-click a type to keep adding it. During repeated Radio placement, hold Ctrl+G to group the radio buttons you click; release and hold again for the next group.</p>
         <p class="hint">Click a type, then click where you want it. Double-click a type to keep placing several in a row. Press Esc to cancel.</p>
         <button data-add="text">+ Text</button>
         <button data-add="checkbox">+ Checkbox</button>
@@ -98,6 +99,15 @@
         </div>
         <label>Options<textarea name="options" rows="3" placeholder="One dropdown/list option per line"></textarea></label>
         <label>Default value<input name="default_value"></label>
+        <label>Button action
+          <select name="button_action">
+            <option value="">None</option>
+            <option value="clear_form">Clear form</option>
+            <option value="print">Print</option>
+            <option value="submit">Submit form</option>
+            <option value="reset_page">Reset current page</option>
+          </select>
+        </label>
         <label>Tooltip<input name="tooltip" placeholder="Help text shown by PDF viewers"></label>
         <label>Group (radio buttons with the same group act as one choice)
           <input name="group" list="group-suggestions">
@@ -144,6 +154,18 @@
             <option value="date">Date</option>
             <option value="zip">Zip code</option>
             <option value="phone">Phone</option>
+          </select>
+        </label>
+        <label class="check"><input name="date_auto_fill" type="checkbox"> Auto-fill date/time</label>
+        <label>Date/time format
+          <select name="date_format">
+            <option value="mm/dd/yyyy">07/20/2026</option>
+            <option value="m/d/yyyy">7/20/2026</option>
+            <option value="yyyy-mm-dd">2026-07-20</option>
+            <option value="mmmm d, yyyy">July 20, 2026</option>
+            <option value="mm/dd/yyyy HH:MM">07/20/2026 14:30</option>
+            <option value="mm/dd/yyyy h:MM tt">07/20/2026 2:30 PM</option>
+            <option value="yyyy-mm-dd HH:MM:ss">2026-07-20 14:30:00</option>
           </select>
         </label>
         <label>Calculation

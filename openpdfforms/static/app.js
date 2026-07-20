@@ -18,6 +18,10 @@ const state = {
   pendingSignField: null,
   signedFields: new Set(),
   suppressNextPageClick: false,
+  radioGroupHotkeyActive: false,
+  radioGroupHotkeyDown: false,
+  activeRadioPlacementGroup: "",
+  nextRadioPlacementGroup: 1,
   currentUser: null,
   previewValues: null,
 };
@@ -356,6 +360,14 @@ document.addEventListener("pointercancel", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "g" && radioGroupingAvailable()) {
+    event.preventDefault();
+    if (!state.radioGroupHotkeyDown) {
+      state.radioGroupHotkeyDown = true;
+      startRadioPlacementGroup();
+    }
+    return;
+  }
   if (event.key === "Escape" && state.pendingType) {
     stopPlacing();
     return;
@@ -373,6 +385,13 @@ document.addEventListener("keydown", (event) => {
   } else if (key === "y") {
     event.preventDefault();
     redo();
+  }
+});
+
+document.addEventListener("keyup", (event) => {
+  if (!state.radioGroupHotkeyDown) return;
+  if (event.key.toLowerCase() === "g" || event.key === "Control" || event.key === "Meta") {
+    endRadioPlacementGroup();
   }
 });
 
@@ -457,6 +476,7 @@ inspector.addEventListener("input", () => {
   field.height = Math.max(1, numberValue(data.get("height"), field.height));
   field.options = (data.get("options") || "").split("\n").map((value) => value.trim()).filter(Boolean);
   field.default_value = data.get("default_value") || "";
+  field.button_action = data.get("button_action") || "";
   if (!field.value || field.value === previousDefaultValue) {
     field.value = field.default_value;
   }
@@ -478,6 +498,8 @@ inspector.addEventListener("input", () => {
   field.border_color = data.get("border_color_on") === "on" ? data.get("border_color") : "";
   field.background_color = data.get("background_color_on") === "on" ? data.get("background_color") : "";
   field.format = data.get("format") || "";
+  field.date_auto_fill = data.get("date_auto_fill") === "on";
+  field.date_format = data.get("date_format") || "mm/dd/yyyy";
   field.calc_operation = data.get("calc_operation") || "";
   field.calc_fields = (data.get("calc_fields") || "").split(",").map((value) => value.trim()).filter(Boolean);
   field.condition_default = data.get("condition_default") || "";
@@ -682,6 +704,11 @@ function loadDocumentInfo(info) {
   state.mode = "design";
   state.pendingSignField = null;
   state.signedFields = new Set();
+  const groupNumbers = state.fields
+    .map((field) => String(field.group || "").match(/^radio_group_(\d+)$/))
+    .filter(Boolean)
+    .map((match) => Number(match[1]));
+  state.nextRadioPlacementGroup = Math.max(0, ...groupNumbers) + 1;
   previewButton.disabled = false;
   exportButton.disabled = false;
   saveProjectButton.disabled = false;
@@ -787,7 +814,37 @@ function fieldInitialPreviewValue(field) {
   if (field.type === "checkbox" || field.type === "radio") {
     return field.default_value === "Yes" ? "Yes" : "Off";
   }
+  if (field.type === "date" && field.date_auto_fill) {
+    return formatDateValue(new Date(), field.date_format || "mm/dd/yyyy");
+  }
   return field.default_value || "";
+}
+
+function formatDateValue(date, format) {
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const year = date.getFullYear();
+  const hours24 = date.getHours();
+  const hours12 = hours24 % 12 || 12;
+  const minutes = date.getMinutes();
+  const seconds = date.getSeconds();
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  const pad = (value) => String(value).padStart(2, "0");
+  return (format || "mm/dd/yyyy")
+    .replace(/mmmm/g, monthNames[month - 1])
+    .replace(/yyyy/g, String(year))
+    .replace(/mm/g, pad(month))
+    .replace(/m/g, String(month))
+    .replace(/dd/g, pad(day))
+    .replace(/d/g, String(day))
+    .replace(/HH/g, pad(hours24))
+    .replace(/h/g, String(hours12))
+    .replace(/MM/g, pad(minutes))
+    .replace(/ss/g, pad(seconds))
+    .replace(/tt/g, hours24 >= 12 ? "PM" : "AM");
 }
 
 function buildPreviewValues() {
@@ -828,6 +885,20 @@ function renderFillControls({ clearSelector, pageSelector, inputClass, signClass
     };
 
     if (field.hidden) return;
+
+    if (field.type === "button") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = inputClass;
+      button.textContent = field.label || field.default_value || field.name || "Button";
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        executeButtonAction(field, valueMap, rerender);
+      });
+      style(button);
+      page.appendChild(button);
+      return;
+    }
 
     if (field.type === "signature" || field.type === "initials" || field.type === "digital_signature") {
       const box = document.createElement("div");
@@ -977,6 +1048,29 @@ function recomputeConditions(valueMap = null) {
       }
     });
   });
+}
+
+function executeButtonAction(field, valueMap, rerender) {
+  if (field.button_action === "print") {
+    window.print();
+    return;
+  }
+  if (field.button_action === "clear_form" || field.button_action === "reset_page") {
+    const targetFields = state.fields.filter((item) => {
+      if (item.id === field.id || item.read_only) return false;
+      return field.button_action === "clear_form" || item.page === field.page;
+    });
+    targetFields.forEach((item) => {
+      const value = item.type === "checkbox" || item.type === "radio" ? "Off" : "";
+      setFieldCurrentValue(item, value, valueMap);
+    });
+    recomputeConditions(valueMap);
+    rerender();
+    return;
+  }
+  if (field.button_action === "submit") {
+    alert("Submit actions require a destination URL. Use a custom Acrobat script for a production submit workflow.");
+  }
 }
 
 function renderFields() {
@@ -1194,6 +1288,9 @@ function startPlacing(type, repeat) {
   if (!state.documentId) return;
   state.pendingType = type;
   state.placingRepeat = Boolean(repeat);
+  if (type !== "radio" || !state.placingRepeat) {
+    endRadioPlacementGroup();
+  }
   pages.classList.add("placing");
   document.querySelectorAll("[data-add]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.add === type);
@@ -1204,10 +1301,28 @@ function startPlacing(type, repeat) {
 function stopPlacing() {
   state.pendingType = null;
   state.placingRepeat = false;
+  endRadioPlacementGroup();
   pages.classList.remove("placing");
   document.querySelectorAll("[data-add]").forEach((button) => {
     button.classList.remove("is-active", "is-repeating");
   });
+}
+
+function radioGroupingAvailable() {
+  return state.pendingType === "radio" && state.placingRepeat;
+}
+
+function startRadioPlacementGroup() {
+  if (!radioGroupingAvailable() || state.radioGroupHotkeyActive) return;
+  state.radioGroupHotkeyActive = true;
+  state.activeRadioPlacementGroup = `radio_group_${state.nextRadioPlacementGroup}`;
+  state.nextRadioPlacementGroup += 1;
+}
+
+function endRadioPlacementGroup() {
+  state.radioGroupHotkeyActive = false;
+  state.radioGroupHotkeyDown = false;
+  state.activeRadioPlacementGroup = "";
 }
 
 function canAutoFitTextLine(type) {
@@ -1329,7 +1444,7 @@ function placeField(type, pageElement, pageIndex, event) {
   const { x, y, width, height } = fieldGeometryForPlacement(type, img, pageIndex, event);
   const id = generateId();
   pushHistory();
-  state.fields.push({
+  const field = {
     id,
     page: pageIndex,
     type,
@@ -1354,7 +1469,21 @@ function placeField(type, pageElement, pageIndex, event) {
     value: "",
     signature_data_url: "",
     multi_select: false,
-  });
+    button_action: "",
+    date_auto_fill: false,
+    date_format: "mm/dd/yyyy",
+  };
+  if (type === "radio" && state.radioGroupHotkeyActive && state.activeRadioPlacementGroup) {
+    field.group = state.activeRadioPlacementGroup;
+  }
+  if (type === "button") {
+    field.label = "Button";
+    field.tooltip = "Button";
+  }
+  if (type === "date") {
+    field.format = "date";
+  }
+  state.fields.push(field);
   state.currentPage = pageIndex;
   if (state.placingRepeat) {
     selectOnly(id);
@@ -1419,6 +1548,7 @@ function syncInspector() {
   inspector.height.value = field ? round(field.height) : "";
   inspector.options.value = field?.options?.join("\n") || "";
   inspector.default_value.value = field?.default_value || "";
+  inspector.button_action.value = field?.button_action || "";
   inspector.tooltip.value = field?.tooltip || "";
   inspector.required.checked = Boolean(field?.required);
   inspector.read_only.checked = Boolean(field?.read_only);
@@ -1440,6 +1570,8 @@ function syncInspector() {
   inspector.background_color_on.checked = Boolean(field?.background_color);
   inspector.background_color.value = field?.background_color || "#ffffff";
   inspector.format.value = field?.format || "";
+  inspector.date_auto_fill.checked = Boolean(field?.date_auto_fill);
+  inspector.date_format.value = field?.date_format || "mm/dd/yyyy";
   inspector.calc_operation.value = field?.calc_operation || "";
   inspector.calc_fields.value = field?.calc_fields?.join(", ") || "";
   inspector.condition_default.value = field?.condition_default || "";

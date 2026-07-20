@@ -41,6 +41,22 @@ CALC_OPERATIONS = {
     "max": "MAX",
 }
 
+DATE_FORMATS = {
+    "mm/dd/yyyy",
+    "m/d/yyyy",
+    "yyyy-mm-dd",
+    "mmmm d, yyyy",
+    "mm/dd/yyyy HH:MM",
+    "mm/dd/yyyy h:MM tt",
+    "yyyy-mm-dd HH:MM:ss",
+}
+
+BUTTON_ACTION_SCRIPTS = {
+    "clear_form": "this.resetForm();",
+    "print": "this.print({bUI: true, bSilent: false, bShrinkToFit: true});",
+    "submit": 'app.alert("Configure a submit URL with a custom Acrobat script before using this button in production.");',
+}
+
 
 def _escape_js_string(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
@@ -90,6 +106,27 @@ def _build_condition_script(field: FormField) -> str:
     default_output = _escape_js_string(field.condition_default)
     lines.append(f'else {{ event.value = "{default_output}"; }}')
     return "\n".join(lines)
+
+
+def _date_format(field: FormField) -> str:
+    return field.date_format if field.date_format in DATE_FORMATS else "mm/dd/yyyy"
+
+
+def _date_auto_fill_script(field: FormField) -> str:
+    return f'event.value = util.printd("{_date_format(field)}", new Date());'
+
+
+def _button_action_script(field: FormField, fields: list[FormField]) -> str:
+    if field.button_action == "reset_page":
+        names = [
+            _escape_js_string(item.name)
+            for item in fields
+            if item.page == field.page and item.name != field.name and not item.read_only
+        ]
+        if not names:
+            return ""
+        return "this.resetForm([" + ", ".join(f'"{name}"' for name in names) + "]);"
+    return BUTTON_ACTION_SCRIPTS.get(field.button_action, "")
 
 
 def _hex_to_rgb(hex_color: str) -> tuple[float, float, float] | None:
@@ -269,6 +306,7 @@ def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormFie
             elif field.type == FieldType.button:
                 widget.field_type = getattr(fitz, "PDF_WIDGET_TYPE_BUTTON", fitz.PDF_WIDGET_TYPE_TEXT)
                 widget.field_label = widget.field_label or field.label or "Button"
+                widget.script = _button_action_script(field, fields)
             elif field.type in (FieldType.signature, FieldType.initials):
                 widget.field_type = fitz.PDF_WIDGET_TYPE_SIGNATURE
                 widget.field_label = widget.field_label or ("Initials" if field.type == FieldType.initials else "Mock Sign")
@@ -284,9 +322,13 @@ def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormFie
                 elif field.comb and field.max_length > 0:
                     widget.field_flags |= fitz.PDF_TX_FIELD_IS_COMB
                     widget.text_maxlen = field.max_length
-                if field.format in FORMAT_SCRIPTS:
+                if field.type == FieldType.date:
+                    widget.script_format = f'AFDate_FormatEx("{_date_format(field)}");'
+                elif field.format in FORMAT_SCRIPTS:
                     widget.script_format = FORMAT_SCRIPTS[field.format]
-                if field.conditions:
+                if field.type == FieldType.date and field.date_auto_fill:
+                    widget.script_calc = _date_auto_fill_script(field)
+                elif field.conditions:
                     # Left editable (no read-only flag) so the field still works as a
                     # plain text field in viewers that don't run PDF JavaScript.
                     widget.script_calc = _build_condition_script(field)
