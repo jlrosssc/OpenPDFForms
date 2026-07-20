@@ -213,6 +213,9 @@ const userList = document.querySelector("#user-list");
 const newUsername = document.querySelector("#new-username");
 const newPassword = document.querySelector("#new-password");
 const newIsAdmin = document.querySelector("#new-is-admin");
+const newIdleTimeout = document.querySelector("#new-idle-timeout");
+const newSessionDays = document.querySelector("#new-session-days");
+const newExpireBrowserClose = document.querySelector("#new-expire-browser-close");
 const createUserButton = document.querySelector("#create-user-button");
 
 function appUrl(path) {
@@ -244,6 +247,24 @@ async function refreshUsers() {
       (user) => `
       <article class="user-row" data-user-id="${user.id}">
         <div><strong>${escapeHtml(user.username)}</strong><span>${user.is_admin ? "Admin" : "User"} · ${user.active ? "Active" : "Disabled"}</span></div>
+        <label>Idle
+          <select data-user-setting="idle_timeout_minutes">
+            <option value="0"${Number(user.idle_timeout_minutes || 0) === 0 ? " selected" : ""}>None</option>
+            <option value="15"${Number(user.idle_timeout_minutes || 0) === 15 ? " selected" : ""}>15m</option>
+            <option value="30"${Number(user.idle_timeout_minutes || 0) === 30 ? " selected" : ""}>30m</option>
+            <option value="60"${Number(user.idle_timeout_minutes || 0) === 60 ? " selected" : ""}>1h</option>
+            <option value="120"${Number(user.idle_timeout_minutes || 0) === 120 ? " selected" : ""}>2h</option>
+          </select>
+        </label>
+        <label>Remember
+          <select data-user-setting="session_lifetime_days">
+            <option value="1"${Number(user.session_lifetime_days || 30) === 1 ? " selected" : ""}>1d</option>
+            <option value="7"${Number(user.session_lifetime_days || 30) === 7 ? " selected" : ""}>7d</option>
+            <option value="30"${Number(user.session_lifetime_days || 30) === 30 ? " selected" : ""}>30d</option>
+            <option value="90"${Number(user.session_lifetime_days || 30) === 90 ? " selected" : ""}>90d</option>
+          </select>
+        </label>
+        <label class="check compact-check"><input type="checkbox" data-user-setting="expire_on_browser_close"${user.expire_on_browser_close ? " checked" : ""}> Browser close</label>
         <button type="button" data-user-action="toggle-admin">${user.is_admin ? "Remove Admin" : "Make Admin"}</button>
         <button type="button" data-user-action="toggle-active">${user.active ? "Disable" : "Enable"}</button>
         <button type="button" data-user-action="reset-password">Reset Password</button>
@@ -259,6 +280,9 @@ async function createUserFromDialog() {
     password: newPassword.value,
     is_admin: newIsAdmin.checked,
     active: true,
+    idle_timeout_minutes: Number(newIdleTimeout.value || 0),
+    session_lifetime_days: Number(newSessionDays.value || 30),
+    expire_on_browser_close: newExpireBrowserClose.checked,
   };
   const response = await fetch(appUrl("api/users"), {
     method: "POST",
@@ -272,8 +296,30 @@ async function createUserFromDialog() {
   newUsername.value = "";
   newPassword.value = "";
   newIsAdmin.checked = false;
+  newIdleTimeout.value = "0";
+  newSessionDays.value = "30";
+  newExpireBrowserClose.checked = false;
   await refreshUsers();
 }
+
+userList.addEventListener("change", async (event) => {
+  const input = event.target.closest("[data-user-setting]");
+  if (!input) return;
+  const row = input.closest(".user-row");
+  const userId = row.dataset.userId;
+  const setting = input.dataset.userSetting;
+  const payload = {};
+  payload[setting] = input.type === "checkbox" ? input.checked : Number(input.value);
+  const response = await fetch(appUrl(`api/users/${userId}`), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    alert(await response.text());
+    await refreshUsers();
+  }
+});
 
 userList.addEventListener("click", async (event) => {
   const button = event.target.closest("button[data-user-action]");

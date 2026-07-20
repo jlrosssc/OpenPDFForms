@@ -9,7 +9,7 @@
 <body>
   <header class="topbar">
     <div>
-      <h1>OpenPDFForms <span class="app-version">v0.3.22</span></h1>
+      <h1>OpenPDFForms <span class="app-version">v0.3.23</span></h1>
       <p>Detect, review, and export fillable PDF forms.</p>
     </div>
     <div class="actions">
@@ -246,6 +246,24 @@
         <label>Username<input id="new-username" autocomplete="off"></label>
         <label>Password<input id="new-password" type="password" autocomplete="new-password"></label>
         <label class="check"><input id="new-is-admin" type="checkbox"> Admin</label>
+        <label>Idle timeout
+          <select id="new-idle-timeout">
+            <option value="0">No idle timeout</option>
+            <option value="15">15 minutes</option>
+            <option value="30">30 minutes</option>
+            <option value="60">1 hour</option>
+            <option value="120">2 hours</option>
+          </select>
+        </label>
+        <label>Remember
+          <select id="new-session-days">
+            <option value="1">1 day</option>
+            <option value="7">7 days</option>
+            <option value="30" selected>30 days</option>
+            <option value="90">90 days</option>
+          </select>
+        </label>
+        <label class="check"><input id="new-expire-browser-close" type="checkbox"> Logout when browser closes</label>
         <button id="create-user-button" type="button">Add User</button>
       </section>
       <div id="user-list" class="user-list"></div>

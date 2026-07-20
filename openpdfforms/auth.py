@@ -24,6 +24,9 @@ class User:
     username: str
     is_admin: bool
     active: bool
+    idle_timeout_minutes: int = 0
+    session_lifetime_days: int = SESSION_DAYS
+    expire_on_browser_close: bool = False
 
 
 def _connect() -> sqlite3.Connection:
@@ -48,17 +51,31 @@ def init_auth_db() -> None:
             )
             """
         )
+        _ensure_column(conn, "users", "idle_timeout_minutes", "INTEGER NOT NULL DEFAULT 0")
+        _ensure_column(conn, "users", "session_lifetime_days", f"INTEGER NOT NULL DEFAULT {SESSION_DAYS}")
+        _ensure_column(conn, "users", "expire_on_browser_close", "INTEGER NOT NULL DEFAULT 0")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS sessions (
                 token TEXT PRIMARY KEY,
                 user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 expires_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL,
                 created_at TEXT NOT NULL
             )
             """
         )
+        _ensure_column(conn, "sessions", "last_seen_at", "TEXT NOT NULL DEFAULT ''")
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute("UPDATE sessions SET last_seen_at = created_at WHERE last_seen_at = ''")
+        conn.execute("UPDATE sessions SET last_seen_at = ? WHERE last_seen_at = ''", (now,))
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def users_exist() -> bool:
@@ -95,10 +112,28 @@ def _verify_password(password: str, stored_hash: str) -> bool:
 def _row_to_user(row: sqlite3.Row | None) -> User | None:
     if row is None:
         return None
-    return User(id=int(row["id"]), username=str(row["username"]), is_admin=bool(row["is_admin"]), active=bool(row["active"]))
+    keys = set(row.keys())
+    return User(
+        id=int(row["id"]),
+        username=str(row["username"]),
+        is_admin=bool(row["is_admin"]),
+        active=bool(row["active"]),
+        idle_timeout_minutes=int(row["idle_timeout_minutes"]) if "idle_timeout_minutes" in keys else 0,
+        session_lifetime_days=int(row["session_lifetime_days"]) if "session_lifetime_days" in keys else SESSION_DAYS,
+        expire_on_browser_close=bool(row["expire_on_browser_close"]) if "expire_on_browser_close" in keys else False,
+    )
 
 
-def create_user(username: str, password: str, *, is_admin: bool = False, active: bool = True) -> User:
+def create_user(
+    username: str,
+    password: str,
+    *,
+    is_admin: bool = False,
+    active: bool = True,
+    idle_timeout_minutes: int = 0,
+    session_lifetime_days: int = SESSION_DAYS,
+    expire_on_browser_close: bool = False,
+) -> User:
     username = username.strip()
     if not username:
         raise ValueError("Username is required.")
@@ -108,12 +143,26 @@ def create_user(username: str, password: str, *, is_admin: bool = False, active:
     with _connect() as conn:
         try:
             cursor = conn.execute(
-                "INSERT INTO users (username, password_hash, is_admin, active, created_at) VALUES (?, ?, ?, ?, ?)",
-                (username, _hash_password(password), int(is_admin), int(active), now),
+                """
+                INSERT INTO users (
+                    username, password_hash, is_admin, active, idle_timeout_minutes,
+                    session_lifetime_days, expire_on_browser_close, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    username,
+                    _hash_password(password),
+                    int(is_admin),
+                    int(active),
+                    max(0, int(idle_timeout_minutes)),
+                    max(1, int(session_lifetime_days)),
+                    int(expire_on_browser_close),
+                    now,
+                ),
             )
         except sqlite3.IntegrityError as exc:
             raise ValueError("Username already exists.") from exc
-        row = conn.execute("SELECT id, username, is_admin, active FROM users WHERE id = ?", (cursor.lastrowid,)).fetchone()
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (cursor.lastrowid,)).fetchone()
         user = _row_to_user(row)
         assert user is not None
         return user
@@ -127,16 +176,21 @@ def authenticate(username: str, password: str) -> User | None:
         return _row_to_user(row)
 
 
-def create_session(user_id: int) -> str:
+def create_session(user_id: int) -> tuple[str, int | None]:
     token = secrets.token_urlsafe(32)
     now = datetime.now(timezone.utc)
-    expires = now + timedelta(days=SESSION_DAYS)
     with _connect() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = _row_to_user(row)
+        if user is None:
+            raise ValueError("User not found.")
+        lifetime_days = max(1, user.session_lifetime_days)
+        expires = now + timedelta(days=lifetime_days)
         conn.execute(
-            "INSERT INTO sessions (token, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
-            (token, user_id, expires.isoformat(), now.isoformat()),
+            "INSERT INTO sessions (token, user_id, expires_at, last_seen_at, created_at) VALUES (?, ?, ?, ?, ?)",
+            (token, user_id, expires.isoformat(), now.isoformat(), now.isoformat()),
         )
-    return token
+    return token, None if user.expire_on_browser_close else lifetime_days * 24 * 60 * 60
 
 
 def delete_session(token: str) -> None:
@@ -149,27 +203,55 @@ def delete_session(token: str) -> None:
 def user_from_session(token: str | None) -> User | None:
     if not token:
         return None
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
     with _connect() as conn:
         row = conn.execute(
             """
-            SELECT users.id, users.username, users.is_admin, users.active
+            SELECT users.*, sessions.last_seen_at, sessions.expires_at
             FROM sessions
             JOIN users ON users.id = sessions.user_id
             WHERE sessions.token = ? AND sessions.expires_at > ? AND users.active = 1
             """,
-            (token, now),
+            (token, now.isoformat()),
         ).fetchone()
-        return _row_to_user(row)
+        user = _row_to_user(row)
+        if user is None:
+            return None
+        if user.idle_timeout_minutes > 0:
+            try:
+                last_seen = datetime.fromisoformat(str(row["last_seen_at"]))
+            except ValueError:
+                last_seen = now
+            if now - last_seen > timedelta(minutes=user.idle_timeout_minutes):
+                conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+                return None
+        conn.execute("UPDATE sessions SET last_seen_at = ? WHERE token = ?", (now.isoformat(), token))
+        return user
 
 
 def list_users() -> list[dict]:
     with _connect() as conn:
-        rows = conn.execute("SELECT id, username, is_admin, active, created_at FROM users ORDER BY username COLLATE NOCASE").fetchall()
+        rows = conn.execute(
+            """
+            SELECT id, username, is_admin, active, created_at, idle_timeout_minutes,
+                   session_lifetime_days, expire_on_browser_close
+            FROM users
+            ORDER BY username COLLATE NOCASE
+            """
+        ).fetchall()
         return [dict(row) for row in rows]
 
 
-def update_user(user_id: int, *, password: str | None = None, is_admin: bool | None = None, active: bool | None = None) -> User:
+def update_user(
+    user_id: int,
+    *,
+    password: str | None = None,
+    is_admin: bool | None = None,
+    active: bool | None = None,
+    idle_timeout_minutes: int | None = None,
+    session_lifetime_days: int | None = None,
+    expire_on_browser_close: bool | None = None,
+) -> User:
     assignments: list[str] = []
     values: list[object] = []
     if password:
@@ -183,6 +265,15 @@ def update_user(user_id: int, *, password: str | None = None, is_admin: bool | N
     if active is not None:
         assignments.append("active = ?")
         values.append(int(active))
+    if idle_timeout_minutes is not None:
+        assignments.append("idle_timeout_minutes = ?")
+        values.append(max(0, int(idle_timeout_minutes)))
+    if session_lifetime_days is not None:
+        assignments.append("session_lifetime_days = ?")
+        values.append(max(1, int(session_lifetime_days)))
+    if expire_on_browser_close is not None:
+        assignments.append("expire_on_browser_close = ?")
+        values.append(int(expire_on_browser_close))
     if assignments:
         values.append(user_id)
         with _connect() as conn:
@@ -190,7 +281,7 @@ def update_user(user_id: int, *, password: str | None = None, is_admin: bool | N
             if active is False:
                 conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
     with _connect() as conn:
-        row = conn.execute("SELECT id, username, is_admin, active FROM users WHERE id = ?", (user_id,)).fetchone()
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         user = _row_to_user(row)
         if user is None:
             raise ValueError("User not found.")

@@ -740,12 +740,13 @@ textarea.fill-input {
   font-size: 12px;
 }
 
-.auth-card input, .user-create input {
+.auth-card input, .user-create input, .user-create select, .user-row select {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 5px;
   padding: 8px;
   color: var(--text);
+  background: #fff;
 }
 
 .user-modal form {
@@ -753,7 +754,7 @@ textarea.fill-input {
 }
 
 .user-create {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   align-items: end;
   margin-bottom: 14px;
 }
@@ -765,7 +766,7 @@ textarea.fill-input {
 
 .user-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) repeat(4, auto);
+  grid-template-columns: minmax(150px, 1fr) 86px 86px auto repeat(4, auto);
   gap: 8px;
   align-items: center;
   border: 1px solid var(--line);
@@ -781,4 +782,18 @@ textarea.fill-input {
 .user-row span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.user-row label {
+  display: grid;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.user-row .compact-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
 }

@@ -110,7 +110,8 @@ def login(username: Annotated[str, Form()], password: Annotated[str, Form()]) ->
     if not user:
         return RedirectResponse("../login", status_code=303)
     response = RedirectResponse("../", status_code=303)
-    response.set_cookie(SESSION_COOKIE, create_session(user.id), httponly=True, secure=False, samesite="lax", max_age=30 * 24 * 60 * 60)
+    token, max_age = create_session(user.id)
+    response.set_cookie(SESSION_COOKIE, token, httponly=True, secure=False, samesite="lax", max_age=max_age)
     return response
 
 
@@ -127,7 +128,8 @@ def setup_admin(username: Annotated[str, Form()], password: Annotated[str, Form(
         return RedirectResponse("../login", status_code=303)
     user = create_user(username, password, is_admin=True, active=True)
     response = RedirectResponse("../", status_code=303)
-    response.set_cookie(SESSION_COOKIE, create_session(user.id), httponly=True, secure=False, samesite="lax", max_age=30 * 24 * 60 * 60)
+    token, max_age = create_session(user.id)
+    response.set_cookie(SESSION_COOKIE, token, httponly=True, secure=False, samesite="lax", max_age=max_age)
     return response
 
 
@@ -157,6 +159,9 @@ def add_user(payload: Annotated[dict, Body()], _: Annotated[User, Depends(curren
             str(payload.get("password", "")),
             is_admin=bool(payload.get("is_admin", False)),
             active=bool(payload.get("active", True)),
+            idle_timeout_minutes=int(payload.get("idle_timeout_minutes", 0) or 0),
+            session_lifetime_days=int(payload.get("session_lifetime_days", 30) or 30),
+            expire_on_browser_close=bool(payload.get("expire_on_browser_close", False)),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -173,6 +178,9 @@ def edit_user(user_id: int, payload: Annotated[dict, Body()], admin: Annotated[U
             password=str(payload["password"]) if payload.get("password") else None,
             is_admin=bool(payload["is_admin"]) if "is_admin" in payload else None,
             active=bool(payload["active"]) if "active" in payload else None,
+            idle_timeout_minutes=int(payload["idle_timeout_minutes"]) if "idle_timeout_minutes" in payload else None,
+            session_lifetime_days=int(payload["session_lifetime_days"]) if "session_lifetime_days" in payload else None,
+            expire_on_browser_close=bool(payload["expire_on_browser_close"]) if "expire_on_browser_close" in payload else None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
