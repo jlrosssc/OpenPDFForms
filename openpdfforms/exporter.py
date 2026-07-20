@@ -238,7 +238,7 @@ def export_fillable_pdf(source_pdf: Path, output_pdf: Path, fields: list[FormFie
             widget.field_label = field.tooltip or field.label or field.name
             widget.rect = fitz.Rect(field.x, field.y, field.x + field.width, field.y + field.height)
             widget.text_font = "Helv"
-            widget.text_fontsize = field.font_size or 10
+            widget.text_fontsize = 0 if field.auto_fit_text and field.type in {FieldType.text, FieldType.date} else field.font_size or 10
             widget.field_flags = _field_flags(field)
 
             border_rgb = _hex_to_rgb(field.border_color)

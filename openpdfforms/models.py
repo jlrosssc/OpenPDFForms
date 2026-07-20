@@ -52,6 +52,7 @@ class FormField(BaseModel):
     value: str = ""
     signature_data_url: str = ""
     font_size: float = 10
+    auto_fit_text: bool = False
     multiline: bool = False
     comb: bool = False
     max_length: int = 0

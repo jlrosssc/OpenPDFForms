@@ -468,6 +468,7 @@ inspector.addEventListener("input", () => {
   field.group = data.get("group") || "";
   field.font_size = Math.max(1, numberValue(data.get("font_size"), field.font_size || 10));
   field.max_length = Math.max(0, Math.round(numberValue(data.get("max_length"), field.max_length || 0)));
+  field.auto_fit_text = data.get("auto_fit_text") === "on";
   field.multiline = data.get("multiline") === "on";
   field.comb = data.get("comb") === "on";
   field.multi_select = data.get("multi_select") === "on";
@@ -1427,6 +1428,7 @@ function syncInspector() {
   inspector.group.value = field?.group || "";
   inspector.font_size.value = field ? field.font_size || 10 : "";
   inspector.max_length.value = field ? field.max_length || 0 : "";
+  inspector.auto_fit_text.checked = Boolean(field?.auto_fit_text);
   inspector.multiline.checked = Boolean(field?.multiline);
   inspector.comb.checked = Boolean(field?.comb);
   inspector.multi_select.checked = Boolean(field?.multi_select);
